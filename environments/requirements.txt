@@ -1,0 +1,9 @@
+# Helper script deps (data prep, analysis).
+# nanochat's own deps (torch, wandb, datasets, pyarrow) come from: pip install -e nanochat/
+# datasets and pyarrow are repeated here so the venv is usable for analysis scripts
+# before nanochat is installed; nanochat's constraints (datasets>=4.0.0) take precedence.
+# wandb: plan specified 0.19.11 but nanochat requires >=0.21.3, so pin at the floor.
+datasets>=4.0.0
+pandas==2.2.3
+pyarrow>=19.0.0
+wandb==0.21.3

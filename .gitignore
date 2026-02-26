@@ -1,0 +1,6 @@
+.env
+wandb/
+data/
+results/
+.venv/
+__pycache__/

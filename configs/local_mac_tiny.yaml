@@ -1,0 +1,22 @@
+# local_mac_tiny: minimal model for local metric visibility testing on Apple Silicon
+#
+# Matches flags passed in scripts/launch/run_local.sh.
+# Key Mac-specific choices:
+#   - depth 2 → ~1M param model, trains fast on CPU/MPS
+#   - max_seq_len 512 → reduces memory footprint vs default 2048
+#   - total_batch_size 512 → must equal device_batch_size * max_seq_len (1 * 512)
+#   - window_pattern L → SDPA (PyTorch fallback) has no sliding-window support
+#   - core_metric_every / sample_every disabled → avoids extra downloads on first run
+#
+depth: 2
+max_seq_len: 512
+device_type: mps
+device_batch_size: 1
+total_batch_size: 512
+num_iterations: 300
+eval_every: 250
+eval_tokens: 512
+core_metric_every: -1
+sample_every: -1
+window_pattern: L
+run: local-mac-tiny

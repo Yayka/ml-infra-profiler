@@ -1,0 +1,13 @@
+services:
+  wandb:
+    image: wandb/local:0.40.0
+    platform: linux/amd64
+    ports:
+      - "8080:8080"
+    volumes:
+      - wandb_data:/vol
+    environment:
+      - LICENSE=${WANDB_LICENSE}
+
+volumes:
+  wandb_data:
