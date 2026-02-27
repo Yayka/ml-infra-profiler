@@ -34,5 +34,28 @@ print(" ".join(flags))
 EOF)
 
 cd "$REPO_ROOT/nanochat"
-# Use plain python (not torchrun): MPS is single-process; device_type comes from config.
-"$REPO_ROOT/.venv/bin/python" -m scripts.base_train $TRAIN_ARGS
+
+# If the ml-netprof agent is running on localhost:9100, scrape its Prometheus
+# endpoint as W&B custom metrics during the training run.
+# Start the agent first: make agent-build-darwin && cd agent && ./bin/agent-darwin &
+#
+# wandb.setup() must be called in the same Python process before wandb.init() —
+# WANDB__ env vars are parsed by Python but not reliably forwarded to wandb-core.
+# We write a temp wrapper that calls setup() then runs the training module in-process.
+if curl -sf http://localhost:9100/healthz >/dev/null 2>&1; then
+    _WRAPPER=$(mktemp /tmp/ml_run_XXXXXX.py)
+    trap "rm -f '$_WRAPPER'" EXIT INT TERM
+    cat > "$_WRAPPER" << 'PYEOF'
+import sys, os, wandb, runpy
+sys.path.insert(0, os.getcwd())  # make nanochat/scripts importable (cwd = nanochat/)
+wandb.setup(settings=wandb.Settings(
+    x_stats_open_metrics_endpoints={"agent": "http://localhost:9100/metrics"},
+))
+runpy.run_module("scripts.base_train", run_name="__main__", alter_sys=True)
+PYEOF
+    # Use plain python (not torchrun): MPS is single-process; device_type comes from config.
+    "$REPO_ROOT/.venv/bin/python" "$_WRAPPER" $TRAIN_ARGS
+else
+    # Use plain python (not torchrun): MPS is single-process; device_type comes from config.
+    "$REPO_ROOT/.venv/bin/python" -m scripts.base_train $TRAIN_ARGS
+fi

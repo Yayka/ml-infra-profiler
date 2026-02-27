@@ -40,3 +40,16 @@ tokenizer:
 # Train tiny 2-layer model on Apple Silicon MPS, logging to local W&B
 run:
 	bash scripts/launch/run_local.sh
+
+# --- ml-netprof monitoring agent ---
+
+# Build linux/amd64 binary (for deployment on Linux compute nodes)
+agent-build-linux:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -C agent -o bin/agent-linux ./cmd/agent
+
+# Build native macOS binary (for local dev/testing on macOS)
+agent-build-darwin:
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -C agent -o bin/agent-darwin ./cmd/agent
+
+agent-test:
+	go test -C agent ./...
