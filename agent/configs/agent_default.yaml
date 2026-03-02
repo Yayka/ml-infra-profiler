@@ -1,0 +1,7 @@
+agent:
+  listen_address: ":9100"
+
+network:
+  # Interface name prefixes to include. Empty = all non-loopback interfaces.
+  # Example: ["eth", "ib", "efa", "en"]
+  include_interfaces: []

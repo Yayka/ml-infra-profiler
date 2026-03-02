@@ -8,8 +8,8 @@ setup:
 	python3 -m venv .venv
 	.venv/bin/pip install -r environments/requirements.txt
 	# nanochat has a flat layout that setuptools can't auto-discover; install deps only.
-	# The nanochat package is importable at runtime because run_local.sh cds into nanochat/.
-	.venv/bin/python scripts/install_nanochat_deps.py
+	# The nanochat package is importable at runtime because run_local.py cds into nanochat/.
+	.venv/bin/python scripts/launch/nanochat/install_deps.py
 	cp -n .env.example .env || true
 	@echo ""
 	@echo "Next steps:"
@@ -39,4 +39,17 @@ tokenizer:
 
 # Train tiny 2-layer model on Apple Silicon MPS, logging to local W&B
 run:
-	bash scripts/launch/run_local.sh
+	.venv/bin/python scripts/launch/nanochat/run_local.py
+
+# --- ml-netprof monitoring agent ---
+
+# Build native macOS binary (for local dev/testing on macOS)
+agent-build-darwin:
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -C agent -o bin/agent-darwin ./cmd/agent
+
+agent-start:
+	./agent/bin/agent-darwin -config agent/configs/agent_default.yaml &
+	@echo "Agent running at http://localhost:9100/metrics"
+
+agent-test:
+	go test -C agent ./...
