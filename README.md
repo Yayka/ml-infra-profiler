@@ -112,7 +112,7 @@ data/             # Local data directory (gitignored)
 
 ## Using the agent with your own training script
 
-The ml-netprof agent is a standalone binary with no dependency on nanochat.
+The ml-netprof agent is a standalone binary
 To profile any Python script:
 
 **Step 1 — Start the agent:**
