@@ -47,11 +47,11 @@ Three approaches for adding metrics like per-port network traffic:
 
 ## Repo Structure
 ```
-configs/          # YAML configs for each experiment variant
 src/              # Training code and metric collection
 scripts/
   preflight/      # GPU health checks (GPU Fryer, DCGM, network checks)
-  launch/         # Run scripts (local, cloud, W&B Launch)
+  launch/
+    nanochat/     # Nanochat launcher + configs/
   analysis/       # Export results from W&B API
 infra/
   docker/         # Dockerfile with pinned versions (base image, CUDA, pip)

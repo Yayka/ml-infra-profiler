@@ -5,7 +5,7 @@ nanochat uses a flat layout (dev/, runs/, nanochat/ at the same level) that
 setuptools can't auto-discover, so `pip install -e nanochat/` fails. We parse
 nanochat's pyproject.toml directly and install only its dependencies.
 
-The nanochat package itself is importable at runtime because run_local.sh
+The nanochat package itself is importable at runtime because run_local.py
 cds into the nanochat/ directory before invoking python -m, which puts the
 current directory on sys.path.
 """

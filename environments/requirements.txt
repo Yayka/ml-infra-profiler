@@ -6,4 +6,5 @@
 datasets>=4.0.0
 pandas==2.2.3
 pyarrow>=19.0.0
+python-dotenv>=1.0.0
 wandb==0.21.3

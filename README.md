@@ -79,10 +79,14 @@ Trains a 2-layer ~1M parameter model on Apple Silicon MPS for 300 iterations, lo
 ## Project Structure
 
 ```
-configs/          # YAML configs for each experiment variant
 scripts/
   data/           # Dataset download and preparation
-  launch/         # Run scripts (local, cloud, W&B Launch)
+  launch/
+    nanochat/     # Nanochat launcher and its configs
+    <your-job>/   # Your custom training script goes here
+      run_local.py
+      config/
+        your_config.yaml
 infra/
   docker/         # docker-compose for local W&B server
 environments/     # requirements.txt (pinned), environment.yaml
@@ -94,31 +98,59 @@ data/             # Local data directory (gitignored)
 
 ## Makefile Reference
 
-| Target | Description |
-| ------ | ----------- |
-| `make setup` | Create `.venv`, install deps, copy `.env.example` → `.env` |
-| `make start-wandb` | Start local W&B server at http://localhost:8080 |
-| `make stop-wandb` | Stop local W&B server (data persists in Docker volume) |
-| `make prepare-data` | Download TinyStories to `data/base_data/` |
-| `make tokenizer` | Train BPE tokenizer → `data/tokenizer/tokenizer.pkl` (run once) |
-| `make run` | Train tiny model on MPS, log metrics to W&B |
+| Target                    | Description                                                     |
+| ------------------------- | --------------------------------------------------------------- |
+| `make setup`              | Create `.venv`, install deps, copy `.env.example` → `.env`      |
+| `make start-wandb`        | Start local W&B server at http://localhost:8080                 |
+| `make stop-wandb`         | Stop local W&B server (data persists in Docker volume)          |
+| `make prepare-data`       | Download TinyStories to `data/base_data/`                       |
+| `make tokenizer`          | Train BPE tokenizer → `data/tokenizer/tokenizer.pkl` (run once) |
+| `make agent-build-darwin` | Build the metrics agent binary (macOS arm64)                    |
+| `make agent-start`        | Start the agent in the background on `:9100`                    |
+| `make run`                | Train tiny model on MPS, log metrics to W&B                     |
+
+
+## Using the agent with your own training script
+
+The ml-netprof agent is a standalone binary with no dependency on nanochat.
+To profile any Python script:
+
+**Step 1 — Start the agent:**
+```bash
+./agent/bin/agent-darwin -config agent/configs/agent_default.yaml &
+```
+
+**Step 2 — Add these lines before `wandb.init()` in your script:**
+```python
+import urllib.request, wandb
+try:
+    urllib.request.urlopen("http://localhost:9100/healthz", timeout=1)
+    wandb.setup(settings=wandb.Settings(
+        x_stats_open_metrics_endpoints={"agent": "http://localhost:9100/metrics"}
+    ))
+except Exception:
+    pass  # agent not running; metrics collection skipped
+```
+
+That's it. Your existing `wandb.init()` / training loop continues unchanged.
+Network metrics will appear in W&B under the system metrics panel.
 
 ## Configuration
 
-Training is fully config-driven. The default config is `configs/local_mac_tiny.yaml` — a minimal 2-layer model tuned for local Apple Silicon runs. Pass a different config to `run_local.sh` as the first argument:
+Training is fully config-driven. The default config is `scripts/launch/nanochat/config/local_mac_tiny.yaml` — a minimal 2-layer model tuned for local Apple Silicon runs. Pass a different config as the first argument:
 
 ```bash
-bash scripts/launch/run_local.sh configs/your_config.yaml
+python scripts/launch/nanochat/run_local.py scripts/launch/nanochat/config/your_config.yaml
 ```
 
 Key parameters in `local_mac_tiny.yaml`:
 
-| Parameter | Value | Notes |
-| --------- | ----- | ----- |
-| `depth` | 2 | ~1M params, fast on MPS |
-| `max_seq_len` | 512 | Reduced memory vs default 2048 |
-| `device_type` | mps | Apple Silicon GPU |
-| `num_iterations` | 300 | Short run for local testing |
+| Parameter        | Value | Notes                          |
+| ---------------- | ----- | ------------------------------ |
+| `depth`          | 2     | ~1M params, fast on MPS        |
+| `max_seq_len`    | 512   | Reduced memory vs default 2048 |
+| `device_type`    | mps   | Apple Silicon GPU              |
+| `num_iterations` | 300   | Short run for local testing    |
 
 ## Troubleshooting
 
