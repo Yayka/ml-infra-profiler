@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch a local training run, optionally scraping the ml-netprof agent for network metrics.
+"""Launch a local training run, optionally scraping the ml-netprof agent.
 
 Usage:
     python scripts/launch/run_local.py [config.yaml]
@@ -8,6 +8,7 @@ Defaults to configs/local_mac_tiny.yaml if no config is provided.
 Start the agent first if you want network metrics:
     make agent-build-darwin && ./agent/bin/agent-darwin &
 """
+
 import os
 import runpy
 import sys
@@ -46,7 +47,8 @@ def config_to_flags(config_path: Path) -> list[str]:
 
 
 def main() -> None:
-    config_path = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO_ROOT / "configs/local_mac_tiny.yaml"
+    default_config = REPO_ROOT / "configs/local_mac_tiny.yaml"
+    config_path = Path(sys.argv[1]) if len(sys.argv) > 1 else default_config
 
     load_dotenv(REPO_ROOT / ".env")
     os.environ["NANOCHAT_BASE_DIR"] = str(REPO_ROOT / "data")
@@ -61,9 +63,12 @@ def main() -> None:
     # wandb.setup() must be called before wandb.init() in the same process.
     if agent_running():
         import wandb
-        wandb.setup(settings=wandb.Settings(
-            x_stats_open_metrics_endpoints={"agent": AGENT_METRICS},
-        ))
+
+        wandb.setup(
+            settings=wandb.Settings(
+                x_stats_open_metrics_endpoints={"agent": AGENT_METRICS},
+            )
+        )
 
     runpy.run_module("scripts.base_train", run_name="__main__", alter_sys=True)
 
