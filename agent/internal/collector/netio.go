@@ -8,11 +8,6 @@ import (
 // NetIOCollector collects per-interface network byte and packet counters and
 // exposes them as Prometheus counters labeled by interface name, transport
 // technology (ethernet/infiniband/roce/efa), and direction (rx/tx).
-//
-// Metrics:
-//
-//	ml_net_interface_bytes_total{interface, transport, direction}
-//	ml_net_interface_packets_total{interface, transport, direction}
 type NetIOCollector struct {
 	provider    netio.NetworkStatsProvider
 	include     []string

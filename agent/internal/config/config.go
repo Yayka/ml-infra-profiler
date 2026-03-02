@@ -3,55 +3,44 @@ package config
 
 import (
 	"fmt"
-	"os"
 
-	"gopkg.in/yaml.v3"
+	"github.com/spf13/viper"
 )
 
 // Config holds all agent configuration.
 type Config struct {
-	Agent   AgentConfig   `yaml:"agent"`
-	Network NetworkConfig `yaml:"network"`
+	Agent   AgentConfig   `mapstructure:"agent"`
+	Network NetworkConfig `mapstructure:"network"`
 }
 
 // AgentConfig controls the HTTP listener.
 type AgentConfig struct {
-	ListenAddress string `yaml:"listen_address"`
+	ListenAddress string `mapstructure:"listen_address"`
 }
 
 // NetworkConfig controls which network interfaces are collected.
 type NetworkConfig struct {
 	// IncludeInterfaces is a list of interface name prefixes to include.
 	// An empty list means all non-loopback interfaces are included.
-	IncludeInterfaces []string `yaml:"include_interfaces"`
-}
-
-// DefaultConfig returns the config with default values applied.
-func DefaultConfig() *Config {
-	return &Config{
-		Agent: AgentConfig{
-			ListenAddress: ":9100",
-		},
-	}
+	IncludeInterfaces []string `mapstructure:"include_interfaces"`
 }
 
 // Load reads a YAML file at path and returns a Config with defaults applied
 // for any fields not present in the file.
 func Load(path string) (*Config, error) {
-	cfg := DefaultConfig()
+	v := viper.New()
 
-	data, err := os.ReadFile(path)
-	if err != nil {
+	v.SetDefault("agent.listen_address", ":9100")
+
+	v.SetConfigFile(path)
+	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config %q: %w", path, err)
 	}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("parse config %q: %w", path, err)
 	}
 
-	// Re-apply defaults for zero-value fields after unmarshal.
-	if cfg.Agent.ListenAddress == "" {
-		cfg.Agent.ListenAddress = ":9100"
-	}
-
-	return cfg, nil
+	return &cfg, nil
 }

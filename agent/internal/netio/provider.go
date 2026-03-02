@@ -4,6 +4,8 @@
 // The correct implementation is selected at compile time via build tags.
 package netio
 
+import "strings"
+
 // InterfaceStat holds one snapshot of a network interface's counters.
 type InterfaceStat struct {
 	Name      string // e.g. "eth0", "ib0", "efa0"
@@ -27,7 +29,7 @@ type NetworkStatsProvider interface {
 // Used by both platform implementations.
 func hasPrefix(s string, prefixes []string) bool {
 	for _, p := range prefixes {
-		if len(s) >= len(p) && s[:len(p)] == p {
+		if strings.HasPrefix(s, p) {
 			return true
 		}
 	}
