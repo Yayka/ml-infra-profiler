@@ -1,7 +1,8 @@
 .env
 wandb/
-data/
+/data/
 results/
 .venv/
 __pycache__/
 .claude/worktrees/
+*.pem
