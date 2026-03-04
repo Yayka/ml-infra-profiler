@@ -1,0 +1,13 @@
+# local_linux_tiny: minimal model for local metric visibility testing on Linux (CPU or CUDA)
+depth: 2
+max_seq_len: 512
+device_type: cpu
+device_batch_size: 1
+total_batch_size: 512
+num_iterations: 300
+eval_every: 250
+eval_tokens: 512
+core_metric_every: -1
+sample_every: -1
+window_pattern: L
+run: local-linux-tiny

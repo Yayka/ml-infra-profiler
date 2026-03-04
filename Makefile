@@ -1,4 +1,4 @@
-.PHONY: setup start-wandb stop-wandb prepare-data run
+.PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -38,8 +38,12 @@ tokenizer:
 		$(CURDIR)/.venv/bin/python -m scripts.tok_train --max-chars 50000000
 
 # Train tiny 2-layer model on Apple Silicon MPS, logging to local W&B
-run:
+run-mac:
 	.venv/bin/python scripts/launch/nanochat/run_local.py
+
+# Train tiny 2-layer model on Linux (CPU or CUDA), logging to local W&B
+run-linux:
+	.venv/bin/python scripts/launch/nanochat/run_local.py scripts/launch/nanochat/config/local_linux_tiny.yaml
 
 # --- ml-netprof monitoring agent ---
 
