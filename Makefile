@@ -66,6 +66,7 @@ launch-job:
 	.venv/bin/wandb launch \
 		--uri . \
 		--dockerfile infra/docker/Dockerfile.nanochat \
+		--entry-point "bash scripts/launch/nanochat/entrypoint.sh" \
 		--queue nanochat-gpu \
 		--entity $$WANDB_ENTITY \
 		--project ml-netprof \
