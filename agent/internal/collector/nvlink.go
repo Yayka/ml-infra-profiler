@@ -5,55 +5,81 @@ package collector
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// nvlinkFields lists the DCGM field IDs for per-link NVLink TX and RX bandwidth.
-// These are cumulative byte counters (proper Prometheus Counters).
-// Links 0–11 cover the full complement on A100 SXM.
-var nvlinkTXFields = []dcgm.Short{
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L0,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L1,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L2,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L3,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L4,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L5,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L6,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L7,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L8,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L9,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L10,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_TX_L11,
+// fieldInfo maps a DCGM field ID to a human-readable link index and direction.
+type fieldInfo struct {
+	linkIdx   int
+	direction string
 }
 
-var nvlinkRXFields = []dcgm.Short{
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L0,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L1,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L2,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L3,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L4,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L5,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L6,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L7,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L8,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L9,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L10,
-	dcgm.DCGM_FI_DEV_NVLINK_BANDWIDTH_RX_L11,
+// nvlinkAllFields is the combined TX+RX field list passed to FieldGroupCreate.
+// A100 SXM has 12 NVLink links (L0–L11).
+var nvlinkAllFields []dcgm.Short
+
+// nvlinkFieldMeta maps each field ID to its link index and direction label.
+var nvlinkFieldMeta map[dcgm.Short]fieldInfo
+
+func init() {
+	txFields := []dcgm.Short{
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L0,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L1,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L2,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L3,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L4,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L5,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L6,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L7,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L8,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L9,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L10,
+		dcgm.DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L11,
+	}
+	rxFields := []dcgm.Short{
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L0,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L1,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L2,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L3,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L4,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L5,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L6,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L7,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L8,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L9,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L10,
+		dcgm.DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L11,
+	}
+
+	nvlinkFieldMeta = make(map[dcgm.Short]fieldInfo, len(txFields)+len(rxFields))
+	for i, f := range txFields {
+		nvlinkAllFields = append(nvlinkAllFields, f)
+		nvlinkFieldMeta[f] = fieldInfo{linkIdx: i, direction: "tx"}
+	}
+	for i, f := range rxFields {
+		nvlinkAllFields = append(nvlinkAllFields, f)
+		nvlinkFieldMeta[f] = fieldInfo{linkIdx: i, direction: "rx"}
+	}
 }
 
-// NVLinkCollector collects per-GPU per-link NVLink bandwidth counters via DCGM.
-// Requires CGO_ENABLED=1 and dcgm-hostengine (or embedded DCGM) at runtime.
+// NVLinkCollector collects per-GPU per-link NVLink bandwidth via DCGM.
+// Metrics are Gauges (current KB/s) — DCGM bandwidth fields are rates, not
+// cumulative counters. Requires CGO_ENABLED=1 and libdcgm.so.4 at runtime.
 type NVLinkCollector struct {
-	hostengine string
 	cleanup    func()
-	bytesDesc  *prometheus.Desc
+	gpuGroup   dcgm.GroupHandle
+	fieldGroup dcgm.FieldHandle
+	bwDesc     *prometheus.Desc
 }
 
-// NewNVLinkCollector initialises DCGM and returns an NVLinkCollector.
-// If DCGM initialisation fails the agent exits loudly — a failure here means
-// the DCGM hostengine is absent or misconfigured.
+// NewNVLinkCollector initialises DCGM and registers NVLink bandwidth watches.
+// If DCGM init fails the agent exits loudly — missing DCGM means the binary
+// variant was wrong for this node.
+//
+// hostengine: empty → embedded mode; "host:port" → standalone TCP connection.
 func NewNVLinkCollector(hostengine string) *NVLinkCollector {
 	var (
 		cleanup func()
@@ -62,24 +88,39 @@ func NewNVLinkCollector(hostengine string) *NVLinkCollector {
 	if hostengine == "" {
 		cleanup, err = dcgm.Init(dcgm.Embedded)
 	} else {
-		cleanup, err = dcgm.Init(dcgm.Standalone, hostengine)
+		// Standalone TCP: args are address and "0" (0 = not a unix socket).
+		cleanup, err = dcgm.Init(dcgm.Standalone, hostengine, "0")
 	}
 	if err != nil {
 		log.Fatalf("nvlink: DCGM init failed: %v; is dcgm-hostengine running?", err)
 	}
 
+	fieldGroup, err := dcgm.FieldGroupCreate("ml_nvlink_bw", nvlinkAllFields)
+	if err != nil {
+		cleanup()
+		log.Fatalf("nvlink: FieldGroupCreate failed: %v", err)
+	}
+
+	gpuGroup := dcgm.GroupAllGPUs()
+
+	if err := dcgm.WatchFieldsWithGroup(fieldGroup, gpuGroup); err != nil {
+		cleanup()
+		log.Fatalf("nvlink: WatchFieldsWithGroup failed: %v", err)
+	}
+
 	return &NVLinkCollector{
-		hostengine: hostengine,
 		cleanup:    cleanup,
-		bytesDesc: prometheus.NewDesc(
-			"ml_nvlink_bytes_total",
-			"Total bytes transferred over an NVLink link per GPU (cumulative DCGM counter).",
+		gpuGroup:   gpuGroup,
+		fieldGroup: fieldGroup,
+		bwDesc: prometheus.NewDesc(
+			"ml_nvlink_bandwidth_kbps",
+			"Current NVLink bandwidth in KB/s per GPU per link (DCGM rate metric).",
 			[]string{"gpu_index", "link_index", "direction"}, nil,
 		),
 	}
 }
 
-// Close releases the DCGM connection. Call from main() via defer.
+// Close releases the DCGM connection. Defer this in main() after construction.
 func (c *NVLinkCollector) Close() {
 	if c.cleanup != nil {
 		c.cleanup()
@@ -89,46 +130,43 @@ func (c *NVLinkCollector) Close() {
 func (c *NVLinkCollector) Name() string { return "nvlink" }
 
 func (c *NVLinkCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.bytesDesc
+	ch <- c.bwDesc
 }
 
 func (c *NVLinkCollector) Collect(ch chan<- prometheus.Metric) {
-	gpus, err := dcgm.GetAllDevices()
-	if err != nil {
-		// DCGM temporarily unavailable — emit nothing for this scrape.
-		return
-	}
-
-	for _, gpuIdx := range gpus {
-		gpuLabel := fmt.Sprintf("%d", gpuIdx)
-		c.collectDirection(ch, gpuIdx, gpuLabel, nvlinkTXFields, "tx")
-		c.collectDirection(ch, gpuIdx, gpuLabel, nvlinkRXFields, "rx")
-	}
-}
-
-func (c *NVLinkCollector) collectDirection(
-	ch chan<- prometheus.Metric,
-	gpuIdx uint,
-	gpuLabel string,
-	fields []dcgm.Short,
-	direction string,
-) {
-	values, err := dcgm.GetLatestValuesForFields(gpuIdx, fields)
+	// time.Time{} requests all samples in DCGM's buffer; we then keep only
+	// the latest per (EntityID, FieldID) to emit a single current value.
+	values, _, err := dcgm.GetValuesSince(c.gpuGroup, c.fieldGroup, time.Time{})
 	if err != nil {
 		return
 	}
-	for linkIdx, v := range values {
-		if v.Status != dcgm.ST_OK {
+
+	type valueKey struct {
+		entityID uint
+		fieldID  dcgm.Short
+	}
+	latest := make(map[valueKey]dcgm.FieldValue_v2, len(values))
+	for _, v := range values {
+		if v.Status != 0 {
 			continue
 		}
-		bytes, ok := v.Value.(int64)
+		k := valueKey{v.EntityID, v.FieldID}
+		if existing, ok := latest[k]; !ok || v.TS > existing.TS {
+			latest[k] = v
+		}
+	}
+
+	for k, v := range latest {
+		meta, ok := nvlinkFieldMeta[k.fieldID]
 		if !ok {
 			continue
 		}
-		linkLabel := fmt.Sprintf("%d", linkIdx)
 		ch <- prometheus.MustNewConstMetric(
-			c.bytesDesc, prometheus.CounterValue,
-			float64(bytes), gpuLabel, linkLabel, direction,
+			c.bwDesc, prometheus.GaugeValue,
+			float64(v.Int64()),
+			fmt.Sprintf("%d", k.entityID),
+			fmt.Sprintf("%d", meta.linkIdx),
+			meta.direction,
 		)
 	}
 }
