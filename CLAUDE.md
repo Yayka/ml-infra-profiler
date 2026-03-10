@@ -108,6 +108,222 @@ make run                # trains 2-layer model on MPS, logs to local W&B
 | `make tokenizer` | Train BPE tokenizer on downloaded data → `data/tokenizer/tokenizer.pkl` (run once) |
 | `make run` | Train nanochat 2-layer model on Apple Silicon MPS, log to local W&B |
 
+## Agent Build Variants (`agent/`)
+
+The Go agent is compiled with build tags that act as feature switches. Missing hardware at startup causes a loud `log.Fatalf` — no silent degradation.
+
+### Build Tag Matrix
+
+| Command | Tags active | Collectors |
+|---|---|---|
+| `make build-darwin` | `darwin` | Ethernet only (macOS dev) |
+| `make build-linux` | `linux` | Ethernet only |
+| `make build-linux-ib` | `linux infiniband` | Ethernet + InfiniBand sysfs |
+| `make build-linux-nvidia` | `linux nvlink` | Ethernet + NVLink/DCGM |
+| `make build-linux-full` | `linux infiniband nvlink` | All three |
+
+### Requirements per variant
+
+| Variant | CGO | Go version | Runtime requirement |
+|---|---|---|---|
+| darwin / linux / linux-ib | off | 1.21+ | none / IB driver + sysfs |
+| linux-nvidia / linux-full | **on** | **1.23+** | `dcgm-hostengine` running (or embedded DCGM) |
+
+### Build commands
+
+All targets live in `agent/Makefile`. Run from the `agent/` directory:
+
+```bash
+cd agent
+
+# macOS local dev
+make build-darwin
+
+# Linux: plain Ethernet
+make build-linux
+
+# Linux: + InfiniBand (sysfs; fails loud if /sys/class/infiniband absent)
+make build-linux-ib
+
+# Linux: + NVLink via DCGM (CGO_ENABLED=1; fails loud if DCGM absent)
+make build-linux-nvidia
+
+# Linux: + both IB and NVLink
+make build-linux-full
+
+# Unit tests (darwin tags active; linux/nvlink files skipped)
+make test
+
+# Compile-check Linux+IB without running (cross-compile from macOS)
+make vet-linux-ib
+
+# Compile-check Linux+NVLink (needs CGO and Go 1.23+)
+make vet-linux-nvidia
+```
+
+### Config (`agent/configs/agent_default.yaml`)
+
+The `infiniband.sysfs_path` and `nvlink.dcgm_hostengine` fields are only read when the corresponding build tag is active. No `enabled` flags — the tag is the switch.
+
+## Deploying the Monitoring Stack (Prometheus + Grafana)
+
+The monitoring stack (`infra/prometheus/`) runs on the same host as the W&B server. Both stacks use separate docker-compose files and do not share a Docker network — Prometheus scrapes training nodes directly over the cluster network.
+
+**Prerequisites**: Docker Engine 24+, Docker Compose v2, port 9090 and 3000 reachable from your browser.
+
+### 1. Configure scrape targets
+
+Edit `infra/prometheus/prometheus.yml` and replace the placeholder hostnames with the actual IPs or DNS names of your GPU training nodes:
+
+```yaml
+static_configs:
+  - targets:
+      - "10.0.0.10:9100"   # gpu-node-0
+      - "10.0.0.11:9100"   # gpu-node-1
+```
+
+### 2. (Optional) Change the Grafana admin password
+
+Set `GF_SECURITY_ADMIN_PASSWORD` in `infra/prometheus/docker-compose.yml` before first launch. The default is `admin`; change it before exposing port 3000 to a wider network.
+
+### 3. Start the stack
+
+```bash
+cd infra/prometheus
+docker compose up -d
+```
+
+### 4. Verify
+
+```bash
+# Both containers should show "Up"
+docker compose ps
+
+# Check Prometheus can reach training nodes:
+# http://<monitoring-host>:9090/targets  → all targets should show State=UP
+
+# Grafana pre-loaded dashboard:
+# http://<monitoring-host>:3000  (admin / <your-password>)
+# Dashboard: "ML Training Infrastructure"
+```
+
+### 5. Reload Prometheus config after editing
+
+If you add or remove training nodes without restarting:
+
+```bash
+curl -X POST http://localhost:9090/-/reload
+```
+
+### Stopping / data retention
+
+```bash
+docker compose down          # stop, keep volumes (data preserved)
+docker compose down -v       # stop and delete all stored metrics + Grafana state
+```
+
+Prometheus retains 30 days of metrics by default (`--storage.tsdb.retention.time=30d` in docker-compose.yml).
+
+---
+
+## Deploying the Agent on GPU Training Nodes
+
+Each training node runs the `ml-netprof-agent` binary as a systemd service. It listens on `:9100` and exposes a `/metrics` endpoint that Prometheus scrapes.
+
+### 1. Build the correct binary variant
+
+Run this on a Linux build machine (or cross-compile from macOS). Pick the variant that matches your hardware:
+
+```bash
+cd agent
+
+# A100 nodes with InfiniBand + NVLink (most common for GPU clusters)
+# Requires Go 1.23+ and DCGM headers on the build machine
+CGO_ENABLED=1 make build-linux-full       # → bin/agent-linux-full
+
+# A100 nodes with InfiniBand only (no DCGM)
+make build-linux-ib                       # → bin/agent-linux-ib
+
+# Plain Ethernet nodes (no IB, no NVLink)
+make build-linux                          # → bin/agent-linux
+```
+
+### 2. Copy binary and config to each node
+
+```bash
+GPU_NODE=10.0.0.10   # repeat for each node
+
+# Copy the binary
+scp agent/bin/agent-linux-full ${GPU_NODE}:/usr/local/bin/ml-netprof-agent
+ssh ${GPU_NODE} chmod +x /usr/local/bin/ml-netprof-agent
+
+# Create config directory and copy config
+ssh ${GPU_NODE} mkdir -p /etc/ml-netprof
+scp agent/configs/agent_default.yaml ${GPU_NODE}:/etc/ml-netprof/agent.yaml
+```
+
+### 3. (Optional) Edit config on the node
+
+If you want to restrict which interfaces are collected, edit `/etc/ml-netprof/agent.yaml`:
+
+```yaml
+network:
+  include_interfaces: ["eth", "ib"]   # omit efa/docker/veth noise
+```
+
+For the nvlink variant with a standalone DCGM hostengine (rather than embedded mode):
+
+```yaml
+nvlink:
+  dcgm_hostengine: "localhost:5555"
+```
+
+### 4. Install and start the systemd service
+
+```bash
+GPU_NODE=10.0.0.10
+
+scp infra/agent/ml-netprof-agent.service ${GPU_NODE}:/etc/systemd/system/
+ssh ${GPU_NODE} "systemctl daemon-reload && \
+                 systemctl enable ml-netprof-agent && \
+                 systemctl start ml-netprof-agent"
+```
+
+### 5. Verify the agent is running
+
+```bash
+ssh ${GPU_NODE} systemctl status ml-netprof-agent
+
+# Check metrics are being exported (run on the node or from monitoring host):
+curl http://${GPU_NODE}:9100/metrics | grep -E 'ml_net|ml_ib|ml_nvlink'
+curl http://${GPU_NODE}:9100/healthz   # should return HTTP 200
+```
+
+### 6. Check Prometheus picked up the node
+
+Open `http://<monitoring-host>:9090/targets` — the node should appear with `State=UP`. It may take up to one scrape interval (15 s) to appear.
+
+### Updating the agent binary
+
+```bash
+# Rebuild
+cd agent && make build-linux-full
+
+# Copy and restart on each node
+scp agent/bin/agent-linux-full ${GPU_NODE}:/usr/local/bin/ml-netprof-agent
+ssh ${GPU_NODE} systemctl restart ml-netprof-agent
+```
+
+### Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| `systemctl start` fails immediately | Binary built with wrong variant (e.g. `nvlink` but DCGM not running); check `journalctl -u ml-netprof-agent -n 50` |
+| Target shows `DOWN` in Prometheus | Port 9100 blocked by firewall; run `curl http://<node>:9100/healthz` from the monitoring host |
+| No `ml_ib_*` metrics | Agent built without `-tags infiniband`, or IB driver not loaded |
+| No `ml_nvlink_*` metrics | Agent built without `-tags nvlink`, or `dcgm-hostengine` not running |
+| `permission denied` reading sysfs | Run the agent as `root` (default in the systemd unit) |
+
 ### nanochat Data Location
 
 nanochat reads parquet files from `$NANOCHAT_BASE_DIR/base_data/`. `run_local.sh` sets

@@ -2,6 +2,10 @@ module github.com/Yayka/ml-infra-profiler/agent
 
 go 1.21
 
+// Note: -tags nvlink builds require Go 1.23+ (go-dcgm dependency).
+// Use Go 1.23 on Linux GPU nodes for those builds.
+toolchain go1.23.0
+
 require (
 	github.com/prometheus/client_golang v1.19.1
 	github.com/shirou/gopsutil/v3 v3.24.5
@@ -9,6 +13,7 @@ require (
 )
 
 require (
+	github.com/NVIDIA/go-dcgm v0.0.0-20260214140307-ad5d86fe3d32 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

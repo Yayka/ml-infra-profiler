@@ -1,0 +1,22 @@
+[Unit]
+Description=ml-netprof network metrics agent
+Documentation=https://github.com/Yayka/ml-infra-profiler
+After=network.target
+# If running the nvlink variant, start after DCGM hostengine.
+# Uncomment the line below when dcgm-hostengine.service is present:
+# After=network.target dcgm-hostengine.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/ml-netprof-agent \
+    --config /etc/ml-netprof/agent.yaml
+Restart=on-failure
+RestartSec=5s
+
+# Expose metrics only on the management/monitoring network interface.
+# The config file controls the listen address; restrict further with a firewall.
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
