@@ -1,0 +1,2 @@
+# Local production service files — never commit real API keys or IPs.
+*.prod.service

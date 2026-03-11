@@ -230,48 +230,47 @@ Prometheus retains 30 days of metrics by default (`--storage.tsdb.retention.time
 
 Each training node runs the `ml-netprof-agent` binary as a systemd service. It listens on `:9100` and exposes a `/metrics` endpoint that Prometheus scrapes.
 
-### 1. Build the correct binary variant
+**Build and install directly on each GPU node** (recommended — avoids CGO cross-compilation issues):
 
-Run this on a Linux build machine (or cross-compile from macOS). Pick the variant that matches your hardware:
-
-```bash
-cd agent
-
-# A100 nodes with InfiniBand + NVLink (most common for GPU clusters)
-# Requires Go 1.23+ and DCGM headers on the build machine
-CGO_ENABLED=1 make build-linux-full       # → bin/agent-linux-full
-
-# A100 nodes with InfiniBand only (no DCGM)
-make build-linux-ib                       # → bin/agent-linux-ib
-
-# Plain Ethernet nodes (no IB, no NVLink)
-make build-linux                          # → bin/agent-linux
-```
-
-### 2. Copy binary and config to each node
+### 1. Install Go on the node
 
 ```bash
-GPU_NODE=10.0.0.10   # repeat for each node
+ssh $GPU_NODE
 
-# Copy the binary
-scp agent/bin/agent-linux-full ${GPU_NODE}:/usr/local/bin/ml-netprof-agent
-ssh ${GPU_NODE} chmod +x /usr/local/bin/ml-netprof-agent
-
-# Create config directory and copy config
-ssh ${GPU_NODE} mkdir -p /etc/ml-netprof
-scp agent/configs/agent_default.yaml ${GPU_NODE}:/etc/ml-netprof/agent.yaml
+wget https://go.dev/dl/go1.23.8.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.23.8.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+source ~/.bashrc
+go version
 ```
 
-### 3. (Optional) Edit config on the node
+### 2. Build the correct binary variant
 
-If you want to restrict which interfaces are collected, edit `/etc/ml-netprof/agent.yaml`:
+Pick the variant that matches the node's hardware:
 
-```yaml
-network:
-  include_interfaces: ["eth", "ib"]   # omit efa/docker/veth noise
+```bash
+cd ~/ml-infra-profiler/agent
+
+make build-linux-nvidia   # A100 PCIe/SXM with DCGM (Ethernet + PCIe + NVLink counters)
+make build-linux-full     # + InfiniBand sysfs on top of nvlink
+make build-linux-ib       # InfiniBand only, no DCGM, no CGO
+make build-linux          # Ethernet only
 ```
 
-For the nvlink variant with a standalone DCGM hostengine (rather than embedded mode):
+### 3. Install binary and config
+
+```bash
+sudo cp agent/bin/agent-linux-nvidia /usr/local/bin/ml-netprof-agent
+sudo chmod +x /usr/local/bin/ml-netprof-agent
+sudo mkdir -p /etc/ml-netprof
+sudo cp agent/configs/agent_default.yaml /etc/ml-netprof/agent.yaml
+```
+
+If DCGM is running as a standalone hostengine (check with `systemctl status nvidia-dcgm`), edit the config:
+
+```bash
+sudo nano /etc/ml-netprof/agent.yaml
+```
 
 ```yaml
 nvlink:
@@ -281,48 +280,39 @@ nvlink:
 ### 4. Install and start the systemd service
 
 ```bash
-GPU_NODE=10.0.0.10
-
-scp infra/agent/ml-netprof-agent.service ${GPU_NODE}:/etc/systemd/system/
-ssh ${GPU_NODE} "systemctl daemon-reload && \
-                 systemctl enable ml-netprof-agent && \
-                 systemctl start ml-netprof-agent"
+sudo cp infra/agent/ml-netprof-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now ml-netprof-agent
 ```
 
-### 5. Verify the agent is running
+### 5. Verify
 
 ```bash
-ssh ${GPU_NODE} systemctl status ml-netprof-agent
-
-# Check metrics are being exported (run on the node or from monitoring host):
-curl http://${GPU_NODE}:9100/metrics | grep -E 'ml_net|ml_ib|ml_nvlink'
-curl http://${GPU_NODE}:9100/healthz   # should return HTTP 200
+sudo systemctl status ml-netprof-agent
+curl http://localhost:9100/healthz          # → 200 OK
+curl http://localhost:9100/metrics | grep ml_
 ```
 
-### 6. Check Prometheus picked up the node
-
-Open `http://<monitoring-host>:9090/targets` — the node should appear with `State=UP`. It may take up to one scrape interval (15 s) to appear.
+The node should appear as `UP` in Prometheus within one 15 s scrape interval.
 
 ### Updating the agent binary
 
 ```bash
-# Rebuild
-cd agent && make build-linux-full
-
-# Copy and restart on each node
-scp agent/bin/agent-linux-full ${GPU_NODE}:/usr/local/bin/ml-netprof-agent
-ssh ${GPU_NODE} systemctl restart ml-netprof-agent
+cd ~/ml-infra-profiler && git pull
+cd agent && make build-linux-nvidia
+sudo cp bin/agent-linux-nvidia /usr/local/bin/ml-netprof-agent
+sudo systemctl restart ml-netprof-agent
 ```
 
 ### Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
-| `systemctl start` fails immediately | Binary built with wrong variant (e.g. `nvlink` but DCGM not running); check `journalctl -u ml-netprof-agent -n 50` |
-| Target shows `DOWN` in Prometheus | Port 9100 blocked by firewall; run `curl http://<node>:9100/healthz` from the monitoring host |
-| No `ml_ib_*` metrics | Agent built without `-tags infiniband`, or IB driver not loaded |
-| No `ml_nvlink_*` metrics | Agent built without `-tags nvlink`, or `dcgm-hostengine` not running |
-| `permission denied` reading sysfs | Run the agent as `root` (default in the systemd unit) |
+| `go: not found` | Run `export PATH=$PATH:/usr/local/go/bin` or add to `~/.bashrc` |
+| `systemctl start` fails immediately | Wrong binary variant for hardware; check `sudo journalctl -u ml-netprof-agent -n 50` |
+| Target `DOWN` in Prometheus | Port 9100 blocked by Azure NSG; add inbound rule allowing TCP 9100 from monitoring node |
+| No `ml_pcie_*` or `ml_nvlink_*` metrics | Built without `-tags nvlink`, or `dcgm_hostengine` not set in config |
+| No `ml_ib_*` metrics | Built without `-tags infiniband`, or IB driver not loaded |
+| `permission denied` on sysfs | Agent must run as root (default in the systemd unit) |
 
 ### nanochat Data Location
 

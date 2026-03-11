@@ -152,6 +152,68 @@ Key parameters in `local_mac_tiny.yaml`:
 | `device_type`    | mps   | Apple Silicon GPU              |
 | `num_iterations` | 300   | Short run for local testing    |
 
+## Deploying the Metrics Agent on GPU Nodes
+
+The `ml-netprof-agent` runs on each GPU training node and exposes network and GPU metrics on `:9100` for Prometheus to scrape.
+
+### On each GPU node
+
+**1. Install Go** (required for the nvlink/DCGM variant):
+```bash
+wget https://go.dev/dl/go1.23.8.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.23.8.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+source ~/.bashrc
+go version
+```
+
+**2. Build** (from the repo on the node):
+```bash
+cd ~/ml-infra-profiler/agent
+make build-linux-nvidia    # A100 PCIe/SXM: Ethernet + PCIe + NVLink via DCGM
+make build-linux-ib        # InfiniBand only, no DCGM required
+make build-linux           # Ethernet only
+```
+
+**3. Install binary and config:**
+```bash
+sudo cp bin/agent-linux-nvidia /usr/local/bin/ml-netprof-agent
+sudo chmod +x /usr/local/bin/ml-netprof-agent
+sudo mkdir -p /etc/ml-netprof
+sudo cp configs/agent_default.yaml /etc/ml-netprof/agent.yaml
+```
+
+If DCGM is running as a standalone hostengine (`systemctl status nvidia-dcgm`), add to `/etc/ml-netprof/agent.yaml`:
+```yaml
+nvlink:
+  dcgm_hostengine: "localhost:5555"
+```
+
+**4. Install and start the systemd service:**
+```bash
+sudo cp infra/agent/ml-netprof-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now ml-netprof-agent
+```
+
+**5. Verify:**
+```bash
+curl http://localhost:9100/healthz
+curl http://localhost:9100/metrics | grep ml_
+```
+
+### Azure NSG
+
+Port 9100 must be open inbound from the Prometheus/monitoring node. Add an inbound rule in the Azure portal: TCP 9100, source = monitoring node private IP.
+
+### Updating
+
+```bash
+cd ~/ml-infra-profiler && git pull
+cd agent && make build-linux-nvidia
+sudo cp bin/agent-linux-nvidia /usr/local/bin/ml-netprof-agent
+sudo systemctl restart ml-netprof-agent
+```
+
 ## Troubleshooting
 
 **White screen at localhost:8080** — The W&B backend may have failed to start under Rosetta. Check `docker logs docker-wandb-1`. Consider using W&B cloud instead.
