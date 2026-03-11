@@ -16,5 +16,6 @@ func Register(reg *prometheus.Registry, cfg *config.Config, provider netio.Netwo
 		NewNetIOCollector(provider, cfg.Network.IncludeInterfaces),
 		NewInfinibandCollector(cfg.Infiniband.SysfsPath),
 		NewNVLinkCollector(cfg.NVLink.DCGMHostengine),
+		NewPCIeCollector(),
 	)
 }
