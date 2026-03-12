@@ -30,10 +30,10 @@ func main() {
 	provider := netio.NewProvider()
 
 	reg := prometheus.NewRegistry()
-	reg.MustRegister(
-		promcollectors.NewGoCollector(),
-		collector.NewNetIOCollector(provider, cfg.Network.IncludeInterfaces),
-	)
+	reg.MustRegister(promcollectors.NewGoCollector())
+	// collector.Register is defined in one of register_*.go, selected at
+	// compile time by the combination of OS and feature build tags.
+	collector.Register(reg, cfg, provider)
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{

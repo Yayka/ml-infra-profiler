@@ -1,2 +1,5 @@
 bin/
 agent
+# Local production configs — never commit real node IPs, passwords, or paths.
+# Name your prod config *.prod.yaml (e.g. configs/agent_prod.yaml) and it stays local.
+configs/*.prod.yaml

@@ -1,0 +1,17 @@
+[Unit]
+Description=W&B Launch Agent
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=azureuser
+WorkingDirectory=/home/azureuser
+Environment="WANDB_API_KEY=<your-api-key>"
+Environment="WANDB_BASE_URL=http://<wandb-server-ip>:8080"
+ExecStart=/home/azureuser/.venv/bin/wandb launch-agent --queue nanochat-gpu --entity yayka
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

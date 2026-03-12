@@ -1,0 +1,3 @@
+# Local production overrides — never commit real node IPs.
+# Name your prod Prometheus config prometheus.prod.yml and it stays local.
+prometheus.prod.yml

@@ -5,3 +5,14 @@ network:
   # Interface name prefixes to include. Empty = all non-loopback interfaces.
   # Example: ["eth", "ib", "efa", "en"]
   include_interfaces: []
+
+infiniband:
+  # Path to InfiniBand sysfs. Required when compiled with -tags infiniband.
+  # The agent exits loudly at startup if this path does not exist.
+  sysfs_path: /sys/class/infiniband
+
+nvlink:
+  # DCGM hostengine address (e.g. "localhost:5555"). Leave empty for embedded mode.
+  # Required when compiled with -tags nvlink.
+  # The agent exits loudly at startup if DCGM is unavailable.
+  dcgm_hostengine: ""
