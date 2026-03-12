@@ -1,0 +1,16 @@
+FROM pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime
+
+WORKDIR /workspace
+
+# Deps for PyTorch inductor CPU compilation (fallback) + git
+RUN apt-get update && apt-get install -y git g++ python3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy repo (code artifact includes initialized nanochat/ submodule)
+COPY . .
+
+# Install Python deps: repo requirements + nanochat runtime deps
+RUN pip install --no-cache-dir -r environments/requirements.txt && \
+    python scripts/launch/nanochat/install_deps.py
+
+ENTRYPOINT ["bash", "scripts/launch/nanochat/entrypoint.sh"]

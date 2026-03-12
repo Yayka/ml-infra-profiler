@@ -1,4 +1,4 @@
-.PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux
+.PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux launch-job launch-agent
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -57,3 +57,24 @@ agent-start:
 
 agent-test:
 	go test -C agent ./...
+
+# --- W&B Launch ---
+
+# Submit nanochat job to the W&B Launch queue (run from local or W&B-server VM)
+launch-job:
+	set -a && . ./.env && set +a && \
+	.venv/bin/wandb launch \
+		--uri . \
+		--dockerfile infra/docker/Dockerfile.nanochat \
+		--entry-point "bash scripts/launch/nanochat/entrypoint.sh" \
+		--queue nanochat-gpu \
+		--entity $$WANDB_ENTITY \
+		--project ml-netprof \
+		--job-name nanochat-train
+
+# Start the W&B launch agent (run ON the GPU VM, not locally)
+launch-agent:
+	wandb launch-agent \
+		--queue nanochat-gpu \
+		--entity $$WANDB_ENTITY \
+		--config infra/launch/launch-config.yaml
