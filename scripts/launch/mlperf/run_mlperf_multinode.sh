@@ -121,7 +121,7 @@ DOCKER_CMD="mkdir -p ${RESULTS_DIR} && docker run --rm \
     --gpus '\"device=${GPU_INDICES}\"' \
     --network=host \
     --shm-size=64g \
-    -v ${DATA_DIR}:/data/c4:ro \
+    -v ${DATA_DIR}:/data/c4 \
     -v ${RESULTS_DIR}:/results \
     -v ${REPO_DIR}/.env:/workspace/.env:ro \
     -v ${REPO_DIR}/scripts/launch/mlperf/nemo_entrypoint.sh:/workspace/nemo_entrypoint.sh:ro \
