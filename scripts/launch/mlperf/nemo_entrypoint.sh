@@ -87,7 +87,7 @@ exec torchrun \
     model.micro_batch_size=1 \
     model.global_batch_size=2048 \
     model.tensor_model_parallel_size=2 \
-    model.pipeline_model_parallel_size=1 \
+    model.pipeline_model_parallel_size=2 \
     \
     model.encoder_seq_length=8192 \
     model.max_position_embeddings=8192 \
@@ -106,7 +106,7 @@ exec torchrun \
     model.attention_dropout=0.0 \
     \
     model.activations_checkpoint_method=block \
-    model.activations_checkpoint_num_layers=32 \
+    model.activations_checkpoint_num_layers=16 \
     \
     model.tokenizer.library=huggingface \
     model.tokenizer.type=/data/c4/llama3_1_8b_tokenizer \
