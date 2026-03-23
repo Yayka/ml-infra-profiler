@@ -132,4 +132,5 @@ exec torchrun \
     exp_manager.exp_dir=/results/mlperf_llama3_8b \
     exp_manager.name=mlperf-llama3-8b-4gpu \
     exp_manager.create_wandb_logger=false \
+    exp_manager.create_checkpoint_callback=false \
     exp_manager.resume_if_exists=false
