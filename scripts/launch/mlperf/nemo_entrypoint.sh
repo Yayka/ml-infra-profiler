@@ -87,7 +87,7 @@ exec torchrun \
     model.micro_batch_size=1 \
     model.global_batch_size=2048 \
     model.tensor_model_parallel_size=2 \
-    model.pipeline_model_parallel_size=2 \
+    model.pipeline_model_parallel_size=1 \
     \
     model.encoder_seq_length=8192 \
     model.max_position_embeddings=8192 \
@@ -106,7 +106,7 @@ exec torchrun \
     model.attention_dropout=0.0 \
     \
     model.activations_checkpoint_method=block \
-    model.activations_checkpoint_num_layers=16 \
+    model.activations_checkpoint_num_layers=32 \
     \
     model.tokenizer.library=huggingface \
     model.tokenizer.type=/data/c4/llama3_1_8b_tokenizer \
@@ -120,7 +120,7 @@ exec torchrun \
     model.data.index_mapping_dir=/results/index_mapping \
     '+model.data.data_prefix={train:[1.0,/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-train.en_6_text_document],validation:[/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document],test:[/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document]}' \
     \
-    model.optim.name=distributed_fused_adam \
+    model.optim.name=fused_adam \
     model.optim.lr=3.0e-4 \
     model.optim.weight_decay=0.1 \
     'model.optim.betas=[0.9,0.95]' \

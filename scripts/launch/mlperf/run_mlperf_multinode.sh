@@ -111,7 +111,7 @@ echo ""
 
 NCCL_ENV_FLAGS=""
 if [[ "$NCCL_TRANSPORT" == "tcp" ]]; then
-    NCCL_ENV_FLAGS="-e NCCL_IB_DISABLE=1 -e NCCL_SOCKET_IFNAME=eth0"
+    NCCL_ENV_FLAGS="-e NCCL_IB_DISABLE=1 -e NCCL_SOCKET_IFNAME=eth0 -e NCCL_DEBUG=WARN -e NCCL_P2P_DISABLE=0"
 fi
 
 # GPU device string: "device=0,1" for 2 GPUs, "device=0,1,2,3" for 4, etc.
