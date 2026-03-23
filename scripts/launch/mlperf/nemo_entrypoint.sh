@@ -99,8 +99,8 @@ exec torchrun \
     model.activations_checkpoint_method=block \
     model.activations_checkpoint_num_layers=1 \
     \
-    model.tokenizer.library=sentencepiece \
-    model.tokenizer.model=/data/c4/llama3_1_8b_tokenizer/original/tokenizer.model \
+    model.tokenizer.library=huggingface \
+    model.tokenizer.type=/data/c4/llama3_1_8b_tokenizer \
     \
     model.data.data_impl=mmap \
     model.data.splits_string=\'990,9,1\' \
