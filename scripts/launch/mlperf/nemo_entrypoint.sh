@@ -72,8 +72,8 @@ exec torchrun \
     trainer.val_check_interval=100 \
     trainer.log_every_n_steps=10 \
     trainer.gradient_clip_val=1.0 \
-    trainer.num_sanity_val_steps=0 \
-    trainer.enable_checkpointing=true \
+    trainer.enable_checkpointing=false \
+    +trainer.num_sanity_val_steps=0 \
     \
     model.micro_batch_size=1 \
     model.global_batch_size=2048 \
