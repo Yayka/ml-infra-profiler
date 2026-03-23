@@ -49,15 +49,16 @@ fi
 echo "Data files verified."
 echo ""
 
-# NeMo uses torchrun internally via the megatron_gpt_pretraining.py launcher.
-# Pass distributed args via the trainer overrides.
-exec python /opt/NeMo/examples/nlp/language_modeling/megatron_gpt_pretraining.py \
+# Launch via torchrun for multi-node distributed training.
+# --network=host on the docker run ensures NCCL can reach the master node directly.
+exec torchrun \
+    --nproc_per_node="${GPUS_PER_NODE}" \
+    --nnodes="${NNODES}" \
+    --node_rank="${NODE_RANK}" \
+    --master_addr="${MASTER_ADDR}" \
+    --master_port="${MASTER_PORT}" \
+    /opt/NeMo/examples/nlp/language_modeling/megatron_gpt_pretraining.py \
     --config-path /workspace \
     --config-name config.yaml \
     trainer.num_nodes="${NNODES}" \
-    trainer.devices="${GPUS_PER_NODE}" \
-    +trainer.strategy.find_unused_parameters=false \
-    cluster_type=bcm \
-    +cluster.node_rank="${NODE_RANK}" \
-    +cluster.master_address="${MASTER_ADDR}" \
-    +cluster.master_port="${MASTER_PORT}"
+    trainer.devices="${GPUS_PER_NODE}"
