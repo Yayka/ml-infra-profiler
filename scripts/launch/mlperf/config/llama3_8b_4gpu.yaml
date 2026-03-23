@@ -1,0 +1,130 @@
+# llama3_8b_4gpu.yaml — MLPerf Training v6.0 Llama3.1 8B adapted for 2 nodes × 2 GPUs
+#
+# Reference: nvcr.io/nvidia/nemo:24.12-rc0 8-GPU config
+# Scaling: 8 GPUs → 4 GPUs, global_batch_size preserved at 2048 (identical training dynamics).
+#
+# | Parameter                      | 8-GPU Ref | 4-GPU Adaptation | Reason                                   |
+# |--------------------------------|-----------|------------------|------------------------------------------|
+# | trainer.num_nodes              | 1         | 2                | 2 nodes × 2 GPUs                         |
+# | trainer.devices                | 8         | 2                | GPUs per node                            |
+# | model.global_batch_size        | 2048      | 2048             | Preserve for identical training dynamics |
+# | model.micro_batch_size         | 4         | 1                | TP=2 gives ~34GB/GPU; mbs>1 hits 40GB   |
+# | Gradient accumulation (auto)   | 64        | 1024             | 2048 / (mbs=1 × DP=2) = 1024            |
+# | tensor_model_parallel_size     | 1         | 2                | TP=1 OOMs on 40GB A100 (weights ~16GB)  |
+# | activations_checkpoint_method  | block     | block            | Belt-and-suspenders with TP=2            |
+# | trainer.max_steps              | 400       | 400              | Same steps = same tokens (GBS preserved) |
+#
+# Memory estimate per GPU with TP=2 on 40GB A100:
+#   Weights (BF16, half-model):      ~8 GB
+#   Gradients (BF16):                ~8 GB
+#   Optimizer states (fp32, /4 GPUs):~16 GB
+#   Activations (with checkpointing): ~2 GB
+#   Total:                           ~34 GB  ← fits with 6 GB headroom
+#
+# Note: MLPerf v6.0 starts from a partially pre-trained checkpoint to hit ≤3.3 perplexity
+# in 400 steps. Verify whether the MLCommons C4 data package includes this checkpoint.
+# Without it, more steps are needed to reach the target from random init.
+
+run_name: mlperf-llama3-8b-4gpu
+
+trainer:
+  num_nodes: 2
+  devices: 2
+  accelerator: gpu
+  precision: bf16
+  max_steps: 400
+  val_check_interval: 100
+  log_every_n_steps: 10
+  enable_checkpointing: true
+  gradient_clip_val: 1.0
+  num_sanity_val_steps: 0
+
+exp_manager:
+  exp_dir: /results/mlperf_llama3_8b
+  name: mlperf-llama3-8b-4gpu
+  create_wandb_logger: true
+  wandb_logger_kwargs:
+    project: ml-netprof
+    name: mlperf-llama3-8b-4gpu
+    log_model: false
+  create_checkpoint_callback: true
+  checkpoint_callback_params:
+    save_last: true
+    save_top_k: 1
+    monitor: val_loss
+    mode: min
+
+model:
+  # Architecture — Llama3.1 8B
+  num_layers: 32
+  hidden_size: 4096
+  ffn_hidden_size: 14336
+  num_attention_heads: 32
+  num_query_groups: 8          # GQA: 8 key-value heads
+  seq_length: 8192
+  max_position_embeddings: 8192
+  position_embedding_type: rope
+  rotary_percentage: 1.0
+  rotary_base: 500000          # Llama3.1 extended RoPE base
+  normalization: rmsnorm
+  norm_epsilon: 1.0e-5
+  do_layer_norm_weight_decay: false
+  bias: false
+  gated_linear_unit: true
+  activation: fast-swiglu
+  hidden_dropout: 0.0
+  attention_dropout: 0.0
+  ffn_dropout: 0.0
+  share_embeddings_and_output_weights: false
+
+  # Batch sizes — 4-GPU scaling
+  global_batch_size: 2048      # preserved from 8-GPU reference
+  micro_batch_size: 1          # 1 to fit 40GB A100; gradient accum = 2048/(1×4) = 512
+
+  # Parallelism — TP=2 required to fit 8B model on 40GB A100s (splits weights intra-node via NVLink).
+  # data_parallel_size = 4 GPUs / (TP=2 × PP=1) = 2.
+  # gradient_accumulation = global_batch_size / (micro_batch_size × DP) = 2048 / (1×2) = 1024.
+  # If GPUs are A100 80GB, TP can be set to 1 and micro_batch_size raised to 2-4.
+  tensor_model_parallel_size: 2
+  pipeline_model_parallel_size: 1
+
+  # Memory — activation checkpointing required for 8B BF16 + Adam on 40GB
+  activations_checkpoint_method: block
+  activations_checkpoint_num_layers: 1
+
+  # Data
+  data:
+    data_impl: mmap
+    splits_string: "99,1,0"
+    seq_length: 8192
+    skip_warmup: true
+    num_workers: 2
+    dataloader_type: single
+    reset_position_ids: false
+    reset_attention_mask: false
+    eod_mask_loss: false
+    train_data_prefix:
+      - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-train.en_6_text_document
+    validation_data_prefix:
+      - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document
+    test_data_prefix:
+      - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document
+
+  # Tokenizer — local SentencePiece model from MLCommons download (no HF token needed)
+  tokenizer:
+    library: sentencepiece
+    model: /data/c4/llama3_1_8b_tokenizer/original/tokenizer.model
+
+  # Optimizer
+  optim:
+    name: distributed_fused_adam
+    lr: 3.0e-4
+    weight_decay: 0.1
+    betas:
+      - 0.9
+      - 0.95
+    sched:
+      name: CosineAnnealing
+      warmup_steps: 50
+      constant_steps: 0
+      min_lr: 3.0e-5
