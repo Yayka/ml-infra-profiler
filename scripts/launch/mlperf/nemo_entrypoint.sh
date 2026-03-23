@@ -101,7 +101,7 @@ exec torchrun \
     \
     model.tokenizer.library=huggingface \
     model.tokenizer.type=/data/c4/llama3_1_8b_tokenizer \
-    model.tokenizer.model=null \
+    model.tokenizer.model=/data/c4/llama3_1_8b_tokenizer/original/tokenizer.model \
     \
     model.data.data_impl=mmap \
     model.data.splits_string=\'990,9,1\' \
