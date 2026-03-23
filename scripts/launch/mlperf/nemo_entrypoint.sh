@@ -104,6 +104,7 @@ exec torchrun \
     model.tokenizer.model=/data/c4/llama3_1_8b_tokenizer/original/tokenizer.model \
     \
     model.data.data_impl=mmap \
+    model.data.index_mapping_dir=/results/index_mapping \
     model.data.seq_length=8192 \
     model.data.skip_warmup=true \
     model.data.num_workers=2 \
