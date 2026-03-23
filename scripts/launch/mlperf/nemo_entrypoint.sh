@@ -54,6 +54,10 @@ fi
 echo "Data files verified."
 echo ""
 
+# Index mapping dir must be writable on every node. Using /results avoids
+# trying to write under the data prefix (which may be read-only or cause races).
+mkdir -p /results/index_mapping
+
 # Use NeMo's built-in megatron_llama_config as the Hydra base, then override
 # with Llama3.1 8B architecture values and our 4-GPU scaling parameters.
 exec torchrun \
@@ -108,6 +112,7 @@ exec torchrun \
     model.data.skip_warmup=true \
     model.data.num_workers=2 \
     model.data.dataloader_type=single \
+    model.data.index_mapping_dir=/results/index_mapping \
     '+model.data.data_prefix={train:[1.0,/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-train.en_6_text_document],validation:[/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document],test:[/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document]}' \
     \
     model.optim.name=distributed_fused_adam \
