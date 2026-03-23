@@ -32,15 +32,17 @@ echo "  W&B base URL: ${WANDB_BASE_URL:-<not set>}"
 echo ""
 
 # Verify data files exist before launching
-if [[ ! -f /data/c4/c4_train_text_document.bin ]]; then
-    echo "ERROR: /data/c4/c4_train_text_document.bin not found." >&2
+TRAIN_BIN=/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-train.en_6_text_document.bin
+VAL_BIN=/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document.bin
+
+if [[ ! -f "${TRAIN_BIN}" ]]; then
+    echo "ERROR: ${TRAIN_BIN} not found." >&2
     echo "  Run 'make prepare-mlperf-data' on this node first." >&2
-    echo "  See scripts/data/prepare_c4_mlperf.sh for details." >&2
     exit 1
 fi
 
-if [[ ! -f /data/c4/c4_val_text_document.bin ]]; then
-    echo "ERROR: /data/c4/c4_val_text_document.bin not found." >&2
+if [[ ! -f "${VAL_BIN}" ]]; then
+    echo "ERROR: ${VAL_BIN} not found." >&2
     exit 1
 fi
 
