@@ -106,7 +106,7 @@ exec torchrun \
     model.attention_dropout=0.0 \
     \
     model.activations_checkpoint_method=block \
-    model.activations_checkpoint_num_layers=1 \
+    model.activations_checkpoint_num_layers=32 \
     \
     model.tokenizer.library=huggingface \
     model.tokenizer.type=/data/c4/llama3_1_8b_tokenizer \

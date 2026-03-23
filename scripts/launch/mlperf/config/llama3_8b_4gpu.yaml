@@ -90,7 +90,7 @@ model:
 
   # Memory — activation checkpointing required for 8B BF16 + Adam on 40GB
   activations_checkpoint_method: block
-  activations_checkpoint_num_layers: 1
+  activations_checkpoint_num_layers: 32   # full recompute: GPUs are 80GB but optimizer states fill ~64GB
 
   # Data
   data:
