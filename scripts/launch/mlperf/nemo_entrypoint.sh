@@ -54,6 +54,11 @@ fi
 echo "Data files verified."
 echo ""
 
+# wandb 0.16.6 (bundled in NeMo 24.12) is incompatible with protobuf 5.x.
+# Upgrade to a version that supports protobuf 5.x.
+echo "Upgrading wandb for protobuf 5.x compatibility..."
+pip install -q "wandb>=0.19.9,<0.21" 2>&1 | tail -3
+
 # Index mapping dir must be writable on every node. Using /results avoids
 # trying to write under the data prefix (which may be read-only or cause races).
 mkdir -p /results/index_mapping
