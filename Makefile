@@ -45,6 +45,11 @@ run-mac:
 run-linux:
 	.venv/bin/python scripts/launch/nanochat/run_local.py scripts/launch/nanochat/config/local_linux_tiny.yaml
 
+# Train on multiple nodes via SSH + torchrun (edit NODES to match your Azure VMs)
+# Example: NODES="10.0.0.10 10.0.0.11" GPUS_PER_NODE=2 make run-multinode
+run-multinode:
+	./scripts/launch/nanochat/run_multinode.sh
+
 # --- ml-netprof monitoring agent ---
 
 # Build native macOS binary (for local dev/testing on macOS)
