@@ -77,15 +77,15 @@ exec torchrun \
     trainer.devices="${GPUS_PER_NODE}" \
     trainer.num_nodes="${NNODES}" \
     trainer.precision=bf16 \
-    trainer.max_steps=400 \
-    trainer.val_check_interval=100 \
-    trainer.log_every_n_steps=10 \
+    trainer.max_steps=200 \
+    trainer.val_check_interval=50 \
+    trainer.log_every_n_steps=5 \
     trainer.gradient_clip_val=1.0 \
     trainer.enable_checkpointing=false \
     +trainer.num_sanity_val_steps=0 \
     \
     model.micro_batch_size=1 \
-    model.global_batch_size=2048 \
+    model.global_batch_size=64 \
     model.tensor_model_parallel_size=2 \
     model.pipeline_model_parallel_size=2 \
     \
