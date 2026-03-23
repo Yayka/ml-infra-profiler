@@ -104,14 +104,11 @@ exec torchrun \
     model.tokenizer.model=/data/c4/llama3_1_8b_tokenizer/original/tokenizer.model \
     \
     model.data.data_impl=mmap \
-    model.data.splits_string=\'990,9,1\' \
     model.data.seq_length=8192 \
     model.data.skip_warmup=true \
     model.data.num_workers=2 \
     model.data.dataloader_type=single \
-    '+model.data.train_data_prefix=[/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-train.en_6_text_document]' \
-    '+model.data.validation_data_prefix=[/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document]' \
-    '+model.data.test_data_prefix=[/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document]' \
+    '+model.data.data_prefix={train:[1.0,/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-train.en_6_text_document],validation:[/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document],test:[/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document]}' \
     \
     model.optim.name=distributed_fused_adam \
     model.optim.lr=3.0e-4 \
