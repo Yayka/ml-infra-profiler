@@ -1,4 +1,5 @@
-.PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux launch-job launch-agent
+.PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux launch-job launch-agent \
+        prepare-mlperf-data pull-nemo run-mlperf verify-mlperf
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -49,6 +50,35 @@ run-linux:
 # Example: NODES="10.0.0.10 10.0.0.11" GPUS_PER_NODE=2 make run-multinode
 run-multinode:
 	./scripts/launch/nanochat/run_multinode.sh
+
+# --- MLPerf Llama3.1 8B benchmark ---
+
+# Prepare C4 v3.0.1 data for MLPerf (runs tokenization inside NeMo container).
+# Path A (preferred): copy pre-tokenized files from MLCommons to DATA_DIR first, then verify.
+# Path B (self-tokenize): set HF_TOKEN and TOKENIZE_PATH=B.
+# DATA_DIR defaults to /data/c4 on the node running this command.
+prepare-mlperf-data:
+	bash scripts/data/prepare_c4_mlperf.sh
+
+# Pull the NeMo container image (~25GB). Requires NGC credentials:
+#   docker login nvcr.io  (username: $$oauthtoken, password: NGC_API_KEY from .env)
+pull-nemo:
+	set -a && . ./.env && set +a && \
+	echo "$$NGC_API_KEY" | docker login nvcr.io -u '$$oauthtoken' --password-stdin
+	docker pull nvcr.io/nvidia/nemo:24.12-rc0
+
+# Launch MLPerf Llama3.1 8B training on 2 nodes × 2 GPUs via SSH + Docker.
+# Required env vars: NODES, INTERNAL_IPS, GPUS_PER_NODE, SSH_KEY, SSH_USER
+# Example:
+#   NODES="<pub0> <pub1>" INTERNAL_IPS="<priv0> <priv1>" \
+#   GPUS_PER_NODE=2 SSH_KEY=~/gpu-key.pem SSH_USER=azureuser make run-mlperf
+run-mlperf:
+	bash scripts/launch/mlperf/run_mlperf_multinode.sh
+
+# Check whether the completed MLPerf run met the val perplexity target (≤ 3.3).
+# Reads final val_loss from W&B. Override run with: WANDB_RUN_PATH=entity/project/run_id
+verify-mlperf:
+	bash scripts/launch/mlperf/verify_run.sh
 
 # --- ml-netprof monitoring agent ---
 

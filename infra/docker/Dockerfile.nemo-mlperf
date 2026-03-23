@@ -1,0 +1,12 @@
+FROM nvcr.io/nvidia/nemo:24.12-rc0
+
+# Pin wandb to match the version used in the rest of this repo (environments/requirements.txt).
+# NeMo ships a different wandb version; overwrite it to ensure consistent run logging behavior.
+RUN pip install --no-cache-dir "wandb==0.21.3"
+
+# Copy the netprof metric collection helper so it is available inside the container.
+# This allows nemo_entrypoint.sh or training hooks to import netprof if needed.
+COPY scripts/netprof.py /workspace/netprof.py
+
+# Default entrypoint is overridden by run_mlperf_multinode.sh via bind-mount of
+# nemo_entrypoint.sh. No ENTRYPOINT set here so `docker run ... bash script.sh` works.
