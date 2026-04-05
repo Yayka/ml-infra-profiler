@@ -31,21 +31,34 @@ echo ""
 # ---------- 1. ResNet v1 int8 TFLite model ----------
 
 MODEL_PATH="${MODEL_DIR}/resnet_v1_int8.tflite"
-MODEL_URL="https://github.com/mlcommons/tiny/raw/master/benchmark/training/image_classification/trained_models/pretraining/vww_96_float.tflite"
-# Fallback: use the person detection / image classification int8 model from TF Hub
-MODEL_URL_FALLBACK="https://github.com/mlcommons/tiny/raw/master/benchmark/runner/eembc_model_files/ic01.tflite"
+# MLCommons tiny repo — ResNet int8 quantized (32x32 input, CIFAR-10, ~85% top-1)
+MODEL_URLS=(
+    "https://raw.githubusercontent.com/mlcommons/tiny/master/benchmark/training/image_classification/trained_models/pretrainedResnet_quant.tflite"
+    "https://raw.githubusercontent.com/mlcommons/tiny/master/benchmark/training/image_classification/trained_models/pretrainedResnet.tflite"
+)
 
 if [[ -f "$MODEL_PATH" ]]; then
     SIZE=$(du -sh "$MODEL_PATH" | cut -f1)
     echo "  SKIP: model already present at $MODEL_PATH  (${SIZE})"
 else
-    echo "Step 1/3: Downloading ResNet v1 int8 TFLite model..."
-    if curl -fsSL --retry 3 --retry-delay 2 -o "$MODEL_PATH" "$MODEL_URL_FALLBACK"; then
-        SIZE=$(du -sh "$MODEL_PATH" | cut -f1)
-        echo "  OK: $MODEL_PATH  (${SIZE})"
-    else
-        echo "ERROR: Model download failed from $MODEL_URL_FALLBACK" >&2
-        echo "  Try manually: curl -o $MODEL_PATH <url>" >&2
+    echo "Step 1/3: Downloading ResNet int8 TFLite model..."
+    DOWNLOADED=0
+    for URL in "${MODEL_URLS[@]}"; do
+        echo "  Trying: $URL"
+        if curl -fsSL --retry 3 --retry-delay 2 -o "$MODEL_PATH" "$URL"; then
+            SIZE=$(du -sh "$MODEL_PATH" | cut -f1)
+            echo "  OK: $MODEL_PATH  (${SIZE})"
+            DOWNLOADED=1
+            break
+        else
+            echo "  Failed (404 or network error), trying next..."
+            rm -f "$MODEL_PATH"
+        fi
+    done
+    if [[ "$DOWNLOADED" -eq 0 ]]; then
+        echo "ERROR: All model download URLs failed." >&2
+        echo "  Manual download:" >&2
+        echo "    curl -o $MODEL_PATH ${MODEL_URLS[0]}" >&2
         exit 1
     fi
 fi
