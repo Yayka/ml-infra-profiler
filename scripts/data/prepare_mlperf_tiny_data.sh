@@ -86,24 +86,6 @@ else
 
     echo ""
     echo "Step 3/3: Extracting CIFAR-10 test batch → cifar10_test.npz..."
-    python3 - <<'PYEOF'
-import os, pickle, tarfile, numpy as np, sys
-
-tar_path = os.environ.get("CIFAR_TAR")
-out_path = os.environ.get("CIFAR_NPZ")
-
-with tarfile.open(tar_path, "r:gz") as tar:
-    member = next(m for m in tar.getmembers() if "test_batch" in m.name)
-    f = tar.extractfile(member)
-    batch = pickle.load(f, encoding="bytes")
-
-images = batch[b"data"].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)  # NHWC
-labels = np.array(batch[b"labels"], dtype=np.int32)
-
-np.savez_compressed(out_path, images=images, labels=labels)
-print(f"  Saved {len(labels)} images + labels → {out_path}")
-PYEOF
-    # Run with env vars for the embedded script
     CIFAR_TAR="$CIFAR_TAR" CIFAR_NPZ="$CIFAR_NPZ" python3 - <<'PYEOF'
 import os, pickle, tarfile, numpy as np
 
