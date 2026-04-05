@@ -1,5 +1,6 @@
 .PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux launch-job launch-agent \
-        prepare-mlperf-data pull-nemo run-mlperf verify-mlperf
+        prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
+        setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -79,6 +80,30 @@ run-mlperf:
 # Reads final val_loss from W&B. Override run with: WANDB_RUN_PATH=entity/project/run_id
 verify-mlperf:
 	bash scripts/launch/mlperf/verify_run.sh
+
+# --- MLPerf Tiny v1.1 IC benchmark (TFLite, Single Stream) ---
+
+# Create .venv-tiny with TFLite + deps (separate from main .venv — TF 2.14 conflicts with torch)
+setup-mlperf-tiny:
+	python3 -m venv .venv-tiny
+	.venv-tiny/bin/pip install --upgrade pip
+	.venv-tiny/bin/pip install -r environments/requirements-mlperf-tiny.txt
+
+# Download CIFAR-10 test set + ResNet TFLite model (~170 MB)
+prepare-mlperf-tiny-data:
+	bash scripts/data/prepare_mlperf_tiny_data.sh
+
+# Run IC benchmark with TFLite GPU delegate on A100
+run-mlperf-tiny:
+	bash scripts/launch/mlperf_tiny/run_mlperf_tiny.sh
+
+# Run IC benchmark on CPU (local dev / no GPU)
+run-mlperf-tiny-cpu:
+	DELEGATE=cpu bash scripts/launch/mlperf_tiny/run_mlperf_tiny.sh
+
+# Check IC accuracy >= 85% from submission result.txt
+verify-mlperf-tiny:
+	bash scripts/launch/mlperf_tiny/verify_tiny_run.sh
 
 # --- ml-netprof monitoring agent ---
 
