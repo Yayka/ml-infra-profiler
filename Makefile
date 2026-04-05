@@ -1,6 +1,7 @@
 .PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux launch-job launch-agent \
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
-        setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny
+        setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
+        build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -104,6 +105,29 @@ run-mlperf-tiny-cpu:
 # Check IC accuracy >= 85% from submission result.txt
 verify-mlperf-tiny:
 	bash scripts/launch/mlperf_tiny/verify_tiny_run.sh
+
+# --- MLPerf Inference v5.0 Llama3.1-8B benchmark (Datacenter, vLLM) ---
+
+# Build Docker image with vLLM + LoadGen + MLCommons reference scripts
+build-mlperf-inference:
+	docker build -f infra/docker/Dockerfile.mlperf-inference \
+		-t ml-netprof/mlperf-inference:latest .
+
+# Download CNN/DM eval dataset + Llama3.1-8B-Instruct model (~15 GB). Requires HF_TOKEN in .env.
+prepare-mlperf-inference-data:
+	bash scripts/data/prepare_mlperf_inference_data.sh
+
+# Run Offline + Server benchmark (vLLM, 2x A100, ~40 min total)
+run-mlperf-inference:
+	bash scripts/launch/mlperf_inference/run_mlperf_inference.sh
+
+# Run Offline scenario only
+run-mlperf-inference-offline:
+	SCENARIO=offline bash scripts/launch/mlperf_inference/run_mlperf_inference.sh
+
+# Check ROUGE scores meet 99% of reference targets (ROUGE-1 >= 38.78, ROUGE-2 >= 15.91, ROUGE-L >= 24.50)
+verify-mlperf-inference:
+	bash scripts/launch/mlperf_inference/verify_inference_run.sh
 
 # --- ml-netprof monitoring agent ---
 

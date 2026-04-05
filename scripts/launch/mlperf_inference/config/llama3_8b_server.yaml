@@ -1,0 +1,11 @@
+scenario: server
+model_path: data/mlperf_inference/models/Meta-Llama-3.1-8B-Instruct
+dataset_path: data/mlperf_inference/dataset/cnn_eval.json
+tensor_parallel_size: 2      # both GPUs on node
+batch_size: 16
+dtype: bfloat16
+total_sample_count: 13368
+max_output_tokens: 128
+system_id: linux_a100_vllm
+min_duration_ms: 120000
+target_qps: 0.5
