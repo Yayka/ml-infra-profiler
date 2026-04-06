@@ -1,7 +1,14 @@
 FROM nvcr.io/nvidia/pytorch:24.07-py3
 WORKDIR /workspace
 
-# Install vLLM, LoadGen, and inference dependencies
+# Clone MLPerf Inference reference scripts first — loadgen is built from source
+RUN git clone --depth 1 --branch v5.0 \
+    https://github.com/mlcommons/inference.git /mlperf_inference
+
+# Build and install mlperf_loadgen from source (no pre-built PyPI wheel)
+RUN cd /mlperf_inference/loadgen && pip install --no-cache-dir .
+
+# Install vLLM and inference dependencies
 RUN pip install --no-cache-dir \
     vllm==0.6.3 \
     transformers==4.46.2 \
@@ -11,11 +18,6 @@ RUN pip install --no-cache-dir \
     accelerate==0.21.0 \
     sentencepiece==0.2.0 \
     absl-py==1.4.0 \
-    huggingface_hub \
-    mlperf-loadgen
-
-# Clone MLPerf Inference reference scripts (pinned to v5.0 tag)
-RUN git clone --depth 1 --branch v5.0 \
-    https://github.com/mlcommons/inference.git /mlperf_inference
+    huggingface_hub
 
 WORKDIR /mlperf_inference/language/llama3.1-8b
