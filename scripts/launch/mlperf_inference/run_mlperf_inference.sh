@@ -113,9 +113,8 @@ run_scenario() {
             --model-path /data/model \
             --dataset-path /data/dataset/cnn_eval.json \
             --dtype "${DTYPE}" \
-            --max-new-tokens "${MAX_OUTPUT_TOKENS}" \
+            --batch-size "${BATCH_SIZE}" \
             --total-sample-count "${TOTAL_SAMPLES}" \
-            --min-duration "${MIN_DURATION}" \
             --output-log-dir /output \
             ${SERVER_ARGS} \
         2>&1 | tee "${LOG_DIR}/run_performance.log"
@@ -141,7 +140,7 @@ run_scenario() {
             --model-path /data/model \
             --dataset-path /data/dataset/cnn_eval.json \
             --dtype ${DTYPE} \
-            --max-new-tokens ${MAX_OUTPUT_TOKENS} \
+            --batch-size ${BATCH_SIZE} \
             --total-sample-count ${TOTAL_SAMPLES} \
             --output-log-dir /output \
             ${SERVER_ARGS} \
