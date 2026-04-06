@@ -20,4 +20,4 @@ RUN pip install --no-cache-dir \
     absl-py==1.4.0 \
     huggingface_hub
 
-WORKDIR /mlperf_inference/language/llama3.1-8b
+WORKDIR /mlperf_inference/language/llama3.1-405b
