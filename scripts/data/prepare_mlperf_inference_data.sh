@@ -62,7 +62,8 @@ if [[ ! -f "${DATASET_DIR}/cnn_eval.json" ]]; then
     exit 1
 fi
 
-SAMPLE_COUNT=$(python3 -c "import json; d=json.load(open('${DATASET_DIR}/cnn_eval.json')); print(len(d))")
+PYTHON="${PYTHON:-$(command -v python3 || command -v python)}"
+SAMPLE_COUNT=$("$PYTHON" -c "import json; d=json.load(open('${DATASET_DIR}/cnn_eval.json')); print(len(d))")
 echo "  OK: ${DATASET_DIR}/cnn_eval.json  (${SAMPLE_COUNT} samples)"
 
 # ---------- Step 2: Model ----------
@@ -103,13 +104,16 @@ elif [[ "${MODEL_DOWNLOAD_PATH}" == "hf" ]]; then
         exit 1
     fi
 
+    PYTHON="${PYTHON:-$(command -v python3 || command -v python)}"
+    PIP="${PIP:-$(command -v pip3 || command -v pip)}"
+
     if ! command -v huggingface-cli &>/dev/null; then
-        pip install --quiet huggingface_hub
+        "$PIP" install --quiet huggingface_hub
     fi
 
     # Use `python -m huggingface_hub` in case huggingface-cli is not on PATH
     # after a fresh pip install (e.g. ~/.local/bin not in PATH on some nodes).
-    python -m huggingface_hub download meta-llama/Meta-Llama-3.1-8B-Instruct \
+    "$PYTHON" -m huggingface_hub download meta-llama/Meta-Llama-3.1-8B-Instruct \
         --local-dir "${MODEL_DIR}" \
         --token "${HF_TOKEN}"
 
