@@ -8,25 +8,25 @@ set -euo pipefail
 # Downloads:
 #   - CNN/DailyMail eval dataset (~500 MB) from MLCommons R2 storage
 #     → data/mlperf_inference/dataset/cnn_eval.json (13,368 samples)
-#   - Meta-Llama-3.1-8B-Instruct model via MLCommons R2 (default, no auth)
-#     or via HuggingFace (set MODEL_DOWNLOAD_PATH=hf, requires HF_TOKEN)
+#   - Meta-Llama-3.1-8B-Instruct model via HuggingFace (default, requires HF_TOKEN)
+#     or via MLCommons R2 (set MODEL_DOWNLOAD_PATH=mlc, no auth)
 #
 # Model download paths:
-#   Path A (default — no auth): MLCommons R2 via mlcr automation
+#   Path A (default — HuggingFace): requires HF_TOKEN in .env and license accepted
+#     huggingface-cli download meta-llama/Meta-Llama-3.1-8B-Instruct
+#   Path B (MLCommons R2 — no auth): set MODEL_DOWNLOAD_PATH=mlc
 #     mlcr get,ml-model,llama3,_mlc,_8b,_r2-downloader
-#   Path B (HuggingFace — gated): set MODEL_DOWNLOAD_PATH=hf
-#     requires HF_TOKEN in .env and license accepted at huggingface.co
 #
 # Usage:
 #   bash scripts/data/prepare_mlperf_inference_data.sh
 #
-#   MODEL_DOWNLOAD_PATH=hf bash scripts/data/prepare_mlperf_inference_data.sh
+#   MODEL_DOWNLOAD_PATH=mlc bash scripts/data/prepare_mlperf_inference_data.sh
 # ============================================================================
 
 DATA_DIR="${DATA_DIR:-data/mlperf_inference}"
 DATASET_DIR="${DATA_DIR}/dataset"
 MODEL_DIR="${DATA_DIR}/models/Meta-Llama-3.1-8B-Instruct"
-MODEL_DOWNLOAD_PATH="${MODEL_DOWNLOAD_PATH:-mlc}"
+MODEL_DOWNLOAD_PATH="${MODEL_DOWNLOAD_PATH:-hf}"
 
 # Load .env (strip Makefile ?= syntax if present)
 if [[ -f ".env" ]]; then

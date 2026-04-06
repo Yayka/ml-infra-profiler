@@ -115,7 +115,7 @@ build-mlperf-inference:
 
 # Download CNN/DM eval dataset + Llama3.1-8B-Instruct model (~15 GB). Requires HF_TOKEN in .env.
 prepare-mlperf-inference-data:
-	bash scripts/data/prepare_mlperf_inference_data.sh
+	MODEL_DOWNLOAD_PATH=hf bash scripts/data/prepare_mlperf_inference_data.sh
 
 # Run Offline + Server benchmark (vLLM, 2x A100, ~40 min total)
 run-mlperf-inference:
