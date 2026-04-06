@@ -107,7 +107,9 @@ elif [[ "${MODEL_DOWNLOAD_PATH}" == "hf" ]]; then
         pip install --quiet huggingface_hub
     fi
 
-    huggingface-cli download meta-llama/Meta-Llama-3.1-8B-Instruct \
+    # Use `python -m huggingface_hub` in case huggingface-cli is not on PATH
+    # after a fresh pip install (e.g. ~/.local/bin not in PATH on some nodes).
+    python -m huggingface_hub download meta-llama/Meta-Llama-3.1-8B-Instruct \
         --local-dir "${MODEL_DIR}" \
         --token "${HF_TOKEN}"
 
