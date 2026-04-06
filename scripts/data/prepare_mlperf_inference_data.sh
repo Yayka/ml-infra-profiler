@@ -107,15 +107,19 @@ elif [[ "${MODEL_DOWNLOAD_PATH}" == "hf" ]]; then
     PYTHON="${PYTHON:-$(command -v python3 || command -v python)}"
     PIP="${PIP:-$(command -v pip3 || command -v pip)}"
 
-    if ! command -v huggingface-cli &>/dev/null; then
+    if ! "$PYTHON" -c "import huggingface_hub" &>/dev/null; then
         "$PIP" install --quiet huggingface_hub
     fi
 
-    # Use `python -m huggingface_hub` in case huggingface-cli is not on PATH
-    # after a fresh pip install (e.g. ~/.local/bin not in PATH on some nodes).
-    "$PYTHON" -m huggingface_hub download meta-llama/Meta-Llama-3.1-8B-Instruct \
-        --local-dir "${MODEL_DIR}" \
-        --token "${HF_TOKEN}"
+    # Use snapshot_download API directly — avoids huggingface-cli PATH issues.
+    "$PYTHON" - <<PYEOF
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    local_dir="${MODEL_DIR}",
+    token="${HF_TOKEN}",
+)
+PYEOF
 
     if [[ ! -f "${MODEL_DIR}/config.json" ]]; then
         echo "ERROR: Model download incomplete — config.json not found in ${MODEL_DIR}." >&2
