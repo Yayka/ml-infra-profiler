@@ -103,9 +103,11 @@ run_scenario() {
 
     echo "[${scenario}] Starting performance run..."
     docker run --rm \
-        --gpus '"device=0,1"' \
+        --gpus all \
         --network=host \
-        --shm-size=64g \
+        --ipc=host \
+        --ulimit memlock=-1 \
+        --ulimit stack=67108864 \
         -v "${MODEL_PATH}:/data/model:ro" \
         -v "${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
         -v "$(pwd)/${LOG_DIR}:/output" \
@@ -129,9 +131,11 @@ run_scenario() {
 
     echo "[${scenario}] Starting accuracy run..."
     docker run --rm \
-        --gpus '"device=0,1"' \
+        --gpus all \
         --network=host \
-        --shm-size=64g \
+        --ipc=host \
+        --ulimit memlock=-1 \
+        --ulimit stack=67108864 \
         -v "${MODEL_PATH}:/data/model:ro" \
         -v "${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
         -v "$(pwd)/${LOG_DIR}:/output" \
