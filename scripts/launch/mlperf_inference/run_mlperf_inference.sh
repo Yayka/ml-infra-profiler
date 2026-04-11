@@ -58,6 +58,10 @@ run_scenario() {
 
     MODEL_PATH=$(yaml_get "$CONFIG" model_path)
     DATASET_PATH=$(yaml_get "$CONFIG" dataset_path)
+
+    # Resolve relative paths against repo root; leave absolute paths as-is
+    [[ "$MODEL_PATH"   != /* ]] && MODEL_PATH="$(pwd)/${MODEL_PATH}"
+    [[ "$DATASET_PATH" != /* ]] && DATASET_PATH="$(pwd)/${DATASET_PATH}"
     TP_SIZE=$(yaml_get "$CONFIG" tensor_parallel_size)
     BATCH_SIZE=$(yaml_get "$CONFIG" batch_size)
     DTYPE=$(yaml_get "$CONFIG" dtype)
@@ -102,8 +106,8 @@ run_scenario() {
         --gpus '"device=0,1"' \
         --network=host \
         --shm-size=64g \
-        -v "$(pwd)/${MODEL_PATH}:/data/model:ro" \
-        -v "$(pwd)/${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
+        -v "${MODEL_PATH}:/data/model:ro" \
+        -v "${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
         -v "$(pwd)/${LOG_DIR}:/output" \
         "$IMAGE" \
         python main.py \
@@ -128,8 +132,8 @@ run_scenario() {
         --gpus '"device=0,1"' \
         --network=host \
         --shm-size=64g \
-        -v "$(pwd)/${MODEL_PATH}:/data/model:ro" \
-        -v "$(pwd)/${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
+        -v "${MODEL_PATH}:/data/model:ro" \
+        -v "${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
         -v "$(pwd)/${LOG_DIR}:/output" \
         "$IMAGE" \
         bash -c "python main.py \
