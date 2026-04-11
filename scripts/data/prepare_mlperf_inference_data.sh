@@ -45,26 +45,40 @@ echo "  Model dir:     ${MODEL_DIR}"
 echo "  Model path:    ${MODEL_DOWNLOAD_PATH}"
 echo ""
 
-# ---------- Step 1: CNN/DM dataset ----------
+# ---------- Step 1: CNN/DM dataset (preprocessed pickle) ----------
+
+DATASET_PKL="mlperf_llama3.1_405b_dataset_8313_processed_fp16_eval.pkl"
 
 mkdir -p "${DATASET_DIR}"
-cd "${DATASET_DIR}"
 
-echo "Step 1/2: Downloading CNN/DailyMail eval dataset (~500 MB)..."
-bash <(curl -s https://raw.githubusercontent.com/mlcommons/r2-downloader/refs/heads/main/mlc-r2-downloader.sh) \
-    https://inference.mlcommons-storage.org/metadata/llama3-1-8b-cnn-eval.uri
+echo "Step 1/2: Downloading preprocessed CNN/DailyMail eval dataset (~few GB)..."
 
-cd - > /dev/null
-
-if [[ ! -f "${DATASET_DIR}/cnn_eval.json" ]]; then
-    echo "ERROR: cnn_eval.json not found after download in ${DATASET_DIR}." >&2
-    echo "  Check the download output above for errors." >&2
+if ! command -v rclone &>/dev/null; then
+    echo "  rclone not found. Install with: sudo apt-get install -y rclone"
     exit 1
 fi
 
-PYTHON="${PYTHON:-$(command -v python3 || command -v python)}"
-SAMPLE_COUNT=$("$PYTHON" -c "import json; d=json.load(open('${DATASET_DIR}/cnn_eval.json')); print(len(d))")
-echo "  OK: ${DATASET_DIR}/cnn_eval.json  (${SAMPLE_COUNT} samples)"
+# Configure MLCommons public R2 bucket if not already configured
+if ! rclone listremotes | grep -q "^mlc-inference:"; then
+    rclone config create mlc-inference s3 \
+        provider=Cloudflare \
+        access_key_id="" \
+        secret_access_key="" \
+        endpoint=https://cf-ipv4.vultrobjects.com \
+        no_check_bucket=true \
+        > /dev/null 2>&1
+fi
+
+rclone copy \
+    "mlc-inference:mlcommons-inference-wg-public/llama3.1_405b/${DATASET_PKL}" \
+    "${DATASET_DIR}/" -P
+
+if [[ ! -f "${DATASET_DIR}/${DATASET_PKL}" ]]; then
+    echo "ERROR: ${DATASET_PKL} not found after download in ${DATASET_DIR}." >&2
+    exit 1
+fi
+
+echo "  OK: ${DATASET_DIR}/${DATASET_PKL}"
 
 # ---------- Step 2: Model ----------
 
@@ -137,7 +151,7 @@ echo "  OK: ${MODEL_DIR}/config.json"
 
 echo ""
 echo "Data preparation complete."
-echo "  Dataset: ${DATASET_DIR}/cnn_eval.json"
+echo "  Dataset: ${DATASET_DIR}/${DATASET_PKL}"
 echo "  Model:   ${MODEL_DIR}/"
 echo ""
 echo "Next steps:"
