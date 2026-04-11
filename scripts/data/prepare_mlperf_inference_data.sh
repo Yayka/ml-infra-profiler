@@ -53,17 +53,9 @@ mkdir -p "${DATASET_DIR}"
 
 echo "Step 1/2: Downloading preprocessed CNN/DailyMail eval dataset (~few GB)..."
 
-if ! command -v rclone &>/dev/null; then
-    echo "  rclone not found. Install with: sudo apt-get install -y rclone"
-    exit 1
-fi
-
-rclone copy \
-    ":s3:mlcommons-inference-wg-public/llama3.1_405b/${DATASET_PKL}" \
-    "${DATASET_DIR}/" -P \
-    --s3-provider=Cloudflare \
-    --s3-endpoint=https://cf-ipv4.vultrobjects.com \
-    --s3-no-check-bucket
+bash <(curl -fsSL https://raw.githubusercontent.com/mlcommons/r2-downloader/refs/heads/main/mlc-r2-downloader.sh) \
+    https://raw.githubusercontent.com/mlcommons/r2-infra/main/inference/metadata/llama3-1-405b-dataset-8313.uri \
+    --outdirname="${DATASET_DIR}"
 
 if [[ ! -f "${DATASET_DIR}/${DATASET_PKL}" ]]; then
     echo "ERROR: ${DATASET_PKL} not found after download in ${DATASET_DIR}." >&2
