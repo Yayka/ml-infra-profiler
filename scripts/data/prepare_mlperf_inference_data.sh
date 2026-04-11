@@ -58,19 +58,9 @@ if ! command -v rclone &>/dev/null; then
     exit 1
 fi
 
-# Configure MLCommons public R2 bucket if not already configured
-if ! rclone listremotes | grep -q "^mlc-inference:"; then
-    rclone config create mlc-inference s3 \
-        provider=Cloudflare \
-        access_key_id="" \
-        secret_access_key="" \
-        endpoint=https://cf-ipv4.vultrobjects.com \
-        no_check_bucket=true \
-        > /dev/null 2>&1
-fi
-
+# Use inline backend config — no rclone.conf needed
 rclone copy \
-    "mlc-inference:mlcommons-inference-wg-public/llama3.1_405b/${DATASET_PKL}" \
+    ":s3,provider=Cloudflare,endpoint=https://cf-ipv4.vultrobjects.com:mlcommons-inference-wg-public/llama3.1_405b/${DATASET_PKL}" \
     "${DATASET_DIR}/" -P
 
 if [[ ! -f "${DATASET_DIR}/${DATASET_PKL}" ]]; then
