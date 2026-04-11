@@ -58,10 +58,12 @@ if ! command -v rclone &>/dev/null; then
     exit 1
 fi
 
-# Use inline backend config — no rclone.conf needed
 rclone copy \
-    ":s3,provider=Cloudflare,endpoint=https://cf-ipv4.vultrobjects.com:mlcommons-inference-wg-public/llama3.1_405b/${DATASET_PKL}" \
-    "${DATASET_DIR}/" -P
+    ":s3:mlcommons-inference-wg-public/llama3.1_405b/${DATASET_PKL}" \
+    "${DATASET_DIR}/" -P \
+    --s3-provider=Cloudflare \
+    --s3-endpoint=https://cf-ipv4.vultrobjects.com \
+    --s3-no-check-bucket
 
 if [[ ! -f "${DATASET_DIR}/${DATASET_PKL}" ]]; then
     echo "ERROR: ${DATASET_PKL} not found after download in ${DATASET_DIR}." >&2
