@@ -53,9 +53,10 @@ mkdir -p "${DATASET_DIR}"
 
 echo "Step 1/2: Downloading preprocessed CNN/DailyMail eval dataset (~few GB)..."
 
+pushd "${DATASET_DIR}" > /dev/null
 bash <(curl -fsSL https://raw.githubusercontent.com/mlcommons/r2-downloader/refs/heads/main/mlc-r2-downloader.sh) \
-    https://raw.githubusercontent.com/mlcommons/r2-infra/main/inference/metadata/llama3-1-405b-dataset-8313.uri \
-    --outdirname="${DATASET_DIR}"
+    https://raw.githubusercontent.com/mlcommons/r2-infra/main/inference/metadata/llama3-1-405b-dataset-8313.uri
+popd > /dev/null
 
 if [[ ! -f "${DATASET_DIR}/${DATASET_PKL}" ]]; then
     echo "ERROR: ${DATASET_PKL} not found after download in ${DATASET_DIR}." >&2
