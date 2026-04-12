@@ -108,6 +108,7 @@ run_scenario() {
         --ipc=host \
         --ulimit memlock=-1 \
         --ulimit stack=67108864 \
+        -e VLLM_WORKER_MULTIPROC_METHOD=spawn \
         -v "${MODEL_PATH}:/data/model:ro" \
         -v "${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
         -v "$(pwd)/${LOG_DIR}:/output" \
@@ -136,6 +137,7 @@ run_scenario() {
         --ipc=host \
         --ulimit memlock=-1 \
         --ulimit stack=67108864 \
+        -e VLLM_WORKER_MULTIPROC_METHOD=spawn \
         -v "${MODEL_PATH}:/data/model:ro" \
         -v "${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
         -v "$(pwd)/${LOG_DIR}:/output" \
