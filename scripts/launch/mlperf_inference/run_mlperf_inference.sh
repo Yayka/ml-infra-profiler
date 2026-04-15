@@ -91,12 +91,19 @@ run_scenario() {
         *) echo "ERROR: unknown scenario: $scenario" >&2; exit 1 ;;
     esac
 
-    # Server-specific QPS arg
-    local SERVER_ARGS=""
+    # Server-specific: write user.conf with target_qps
+    local USER_CONF_ARGS=""
     if [[ "$scenario" == "server" ]]; then
         local TARGET_QPS
         TARGET_QPS=$(yaml_get "$CONFIG" target_qps)
-        SERVER_ARGS="--target-qps ${TARGET_QPS}"
+        cat > "${LOG_DIR}/user.conf" <<EOF
+*.Server.target_qps = ${TARGET_QPS}
+*.Server.min_duration = $(yaml_get "$CONFIG" min_duration_ms)
+*.Server.min_query_count = 100
+*.Offline.min_duration = 600000
+*.Offline.min_query_count = 2000
+EOF
+        USER_CONF_ARGS="--user-conf /output/user.conf"
     fi
 
     # ---------- Performance run ----------
@@ -123,7 +130,7 @@ run_scenario() {
             --batch-size "${BATCH_SIZE}" \
             --total-sample-count "${TOTAL_SAMPLES}" \
             --output-log-dir /output \
-            ${SERVER_ARGS} \
+            ${USER_CONF_ARGS} \
         2>&1 | tee "${LOG_DIR}/run_performance.log"
 
     echo "[${scenario}] Performance run complete."
@@ -153,7 +160,7 @@ run_scenario() {
             --batch-size ${BATCH_SIZE} \
             --total-sample-count ${TOTAL_SAMPLES} \
             --output-log-dir /output \
-            ${SERVER_ARGS} \
+            ${USER_CONF_ARGS} \
             && python evaluate-accuracy.py \
             --checkpoint-path /data/model \
             --mlperf-accuracy-file /output/mlperf_log_accuracy.json \
