@@ -119,6 +119,7 @@ EOF
         -v "${MODEL_PATH}:/data/model:ro" \
         -v "${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
         -v "$(pwd)/${LOG_DIR}:/output" \
+        -v "$(pwd)/scripts/launch/mlperf_inference/SUT_VLLM_patched.py:/mlperf_inference/language/llama3.1-405b/SUT_VLLM.py:ro" \
         "$IMAGE" \
         python main.py \
             --scenario "${SCENARIO_FLAG}" \
@@ -148,6 +149,7 @@ EOF
         -v "${MODEL_PATH}:/data/model:ro" \
         -v "${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
         -v "$(pwd)/${LOG_DIR}:/output" \
+        -v "$(pwd)/scripts/launch/mlperf_inference/SUT_VLLM_patched.py:/mlperf_inference/language/llama3.1-405b/SUT_VLLM.py:ro" \
         "$IMAGE" \
         bash -c "python main.py \
             --scenario ${SCENARIO_FLAG} \
