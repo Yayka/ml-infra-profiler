@@ -1,7 +1,8 @@
 .PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux launch-job launch-agent \
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
         setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
-        build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference
+        build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference \
+        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 run-mlperf-llama2-offline
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -128,6 +129,25 @@ run-mlperf-inference-offline:
 # Check ROUGE scores meet 99% of reference targets (ROUGE-1 >= 38.78, ROUGE-2 >= 15.91, ROUGE-L >= 24.50)
 verify-mlperf-inference:
 	bash scripts/launch/mlperf_inference/verify_inference_run.sh
+
+# --- MLPerf Inference v5.0 Llama2-70B benchmark (Datacenter, vLLM, TP=2) ---
+
+# Build Docker image with vLLM + LoadGen + MLCommons reference scripts (llama2-70b workdir)
+build-mlperf-llama2:
+	docker build -f infra/docker/Dockerfile.mlperf-llama2 \
+		-t ml-netprof/mlperf-llama2:latest .
+
+# Download OpenOrca dataset + Llama-2-70b-chat-hf model (~140 GB). Requires HF_TOKEN in .env.
+prepare-mlperf-llama2-data:
+	bash scripts/data/prepare_mlperf_llama2_data.sh
+
+# Run Offline + Server benchmark (vLLM, 2x A100, ~2-4 hours total)
+run-mlperf-llama2:
+	bash scripts/launch/mlperf_llama2/run_mlperf_llama2.sh
+
+# Run Offline scenario only
+run-mlperf-llama2-offline:
+	SCENARIO=offline bash scripts/launch/mlperf_llama2/run_mlperf_llama2.sh
 
 # --- ml-netprof monitoring agent ---
 
