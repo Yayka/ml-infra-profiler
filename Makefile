@@ -2,7 +2,7 @@
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
         setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
         build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference \
-        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 run-mlperf-llama2-offline
+        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -141,13 +141,9 @@ build-mlperf-llama2:
 prepare-mlperf-llama2-data:
 	bash scripts/data/prepare_mlperf_llama2_data.sh
 
-# Run Offline + Server benchmark (vLLM, 2x A100, ~2-4 hours total)
+# Run Server performance benchmark (vLLM, 2x A100)
 run-mlperf-llama2:
 	bash scripts/launch/mlperf_llama2/run_mlperf_llama2.sh
-
-# Run Offline scenario only
-run-mlperf-llama2-offline:
-	SCENARIO=offline bash scripts/launch/mlperf_llama2/run_mlperf_llama2.sh
 
 # --- ml-netprof monitoring agent ---
 

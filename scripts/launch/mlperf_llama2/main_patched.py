@@ -30,10 +30,6 @@ def get_args():
     )
     parser.add_argument("--dataset-path", type=str, default=None, help="")
     parser.add_argument(
-        "--accuracy",
-        action="store_true",
-        help="Run accuracy mode")
-    parser.add_argument(
         "--dtype",
         type=str,
         default="bfloat16",
@@ -119,10 +115,7 @@ def main():
     if args.max_query_count > 0:
         settings.max_query_count = args.max_query_count
 
-    if args.accuracy:
-        settings.mode = lg.TestMode.AccuracyOnly
-    else:
-        settings.mode = lg.TestMode.PerformanceOnly
+    settings.mode = lg.TestMode.PerformanceOnly
 
     os.makedirs(args.output_log_dir, exist_ok=True)
     log_output_settings = lg.LogOutputSettings()
