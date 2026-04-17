@@ -55,6 +55,7 @@ run_scenario() {
     local TOTAL_SAMPLES
     local MAX_OUTPUT_TOKENS
     local MIN_DURATION
+    local MAX_QUERY_COUNT
 
     MODEL_PATH=$(yaml_get "$CONFIG" model_path)
     DATASET_PATH=$(yaml_get "$CONFIG" dataset_path)
@@ -68,6 +69,7 @@ run_scenario() {
     TOTAL_SAMPLES=$(yaml_get "$CONFIG" total_sample_count)
     MAX_OUTPUT_TOKENS=$(yaml_get "$CONFIG" max_output_tokens)
     MIN_DURATION=$(yaml_get "$CONFIG" min_duration_ms)
+    MAX_QUERY_COUNT=$(yaml_get "$CONFIG" max_query_count)
 
     local LOG_DIR="${LOG_BASE}_${scenario}"
     mkdir -p "$LOG_DIR"
@@ -98,8 +100,10 @@ run_scenario() {
         TARGET_QPS=$(yaml_get "$CONFIG" target_qps)
         cat > "${LOG_DIR}/user.conf" <<EOF
 *.Server.target_qps = ${TARGET_QPS}
+*.Server.target_duration = $(yaml_get "$CONFIG" min_duration_ms)
 *.Server.min_duration = $(yaml_get "$CONFIG" min_duration_ms)
 *.Server.min_query_count = 100
+*.Server.max_query_count = 200
 *.Offline.min_duration = 600000
 *.Offline.min_query_count = 2000
 EOF
@@ -120,6 +124,7 @@ EOF
         -v "${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
         -v "$(pwd)/${LOG_DIR}:/output" \
         -v "$(pwd)/scripts/launch/mlperf_inference/SUT_VLLM_patched.py:/mlperf_inference/language/llama3.1-405b/SUT_VLLM.py:ro" \
+        -v "$(pwd)/scripts/launch/mlperf_inference/main_patched.py:/mlperf_inference/language/llama3.1-405b/main.py:ro" \
         "$IMAGE" \
         python main.py \
             --scenario "${SCENARIO_FLAG}" \
@@ -130,13 +135,20 @@ EOF
             --dtype "${DTYPE}" \
             --batch-size "${BATCH_SIZE}" \
             --total-sample-count "${TOTAL_SAMPLES}" \
+            --max-output-tokens "${MAX_OUTPUT_TOKENS}" \
+            --max-query-count "${MAX_QUERY_COUNT:-0}" \
             --output-log-dir /output \
             ${USER_CONF_ARGS} \
         2>&1 | tee "${LOG_DIR}/run_performance.log"
 
     echo "[${scenario}] Performance run complete."
 
-    # ---------- Accuracy run ----------
+    # ---------- Accuracy run (skipped if PERF_ONLY=1) ----------
+
+    if [[ "${PERF_ONLY:-0}" == "1" ]]; then
+        echo "[${scenario}] Skipping accuracy run (PERF_ONLY=1)."
+        return
+    fi
 
     echo "[${scenario}] Starting accuracy run..."
     docker run --rm \
@@ -150,6 +162,7 @@ EOF
         -v "${DATASET_PATH}:/data/dataset/cnn_eval.json:ro" \
         -v "$(pwd)/${LOG_DIR}:/output" \
         -v "$(pwd)/scripts/launch/mlperf_inference/SUT_VLLM_patched.py:/mlperf_inference/language/llama3.1-405b/SUT_VLLM.py:ro" \
+        -v "$(pwd)/scripts/launch/mlperf_inference/main_patched.py:/mlperf_inference/language/llama3.1-405b/main.py:ro" \
         "$IMAGE" \
         bash -c "python main.py \
             --scenario ${SCENARIO_FLAG} \
@@ -161,6 +174,7 @@ EOF
             --dtype ${DTYPE} \
             --batch-size ${BATCH_SIZE} \
             --total-sample-count ${TOTAL_SAMPLES} \
+            --max-output-tokens ${MAX_OUTPUT_TOKENS} \
             --output-log-dir /output \
             ${USER_CONF_ARGS} \
             && python evaluate-accuracy.py \
