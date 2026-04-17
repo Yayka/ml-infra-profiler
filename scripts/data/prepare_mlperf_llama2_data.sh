@@ -47,18 +47,16 @@ bash <(curl -fsSL https://raw.githubusercontent.com/mlcommons/r2-downloader/refs
     https://inference.mlcommons-storage.org/metadata/llama-2-70b-open-orca-dataset.uri
 popd > /dev/null
 
-# Locate the downloaded pkl (exact name may differ from expected)
-ACTUAL_PKL=$(find "${DATASET_DIR}" -maxdepth 1 -name "*.pkl" | head -1)
-if [[ -z "$ACTUAL_PKL" ]]; then
-    echo "ERROR: No .pkl file found after download in ${DATASET_DIR}." >&2
-    ls "${DATASET_DIR}/" || true
+# The downloader places files in an open_orca/ subdirectory as .pkl.gz
+GZ_FILE="${DATASET_DIR}/open_orca/${DATASET_PKL}.gz"
+if [[ ! -f "$GZ_FILE" ]]; then
+    echo "ERROR: Expected ${GZ_FILE} not found after download." >&2
+    ls "${DATASET_DIR}/open_orca/" || true
     exit 1
 fi
 
-# Normalise to the expected filename so the run script can hardcode the path
-if [[ "$(basename "$ACTUAL_PKL")" != "$DATASET_PKL" ]]; then
-    mv "$ACTUAL_PKL" "${DATASET_DIR}/${DATASET_PKL}"
-fi
+echo "  Decompressing ${DATASET_PKL}.gz..."
+gunzip -c "$GZ_FILE" > "${DATASET_DIR}/${DATASET_PKL}"
 
 echo "  OK: ${DATASET_DIR}/${DATASET_PKL}"
 
