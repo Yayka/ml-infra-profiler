@@ -36,6 +36,7 @@ echo ""
 # ---------- Step 1: OpenOrca dataset (preprocessed pickle) ----------
 
 DATASET_PKL="open_orca_gpt4_tokenized_llama.sampled_24576.pkl"
+# Note: actual filename in the archive may vary; we check for any .pkl after download
 
 mkdir -p "${DATASET_DIR}"
 
@@ -43,14 +44,20 @@ echo "Step 1/2: Downloading preprocessed OpenOrca dataset (~4 GB)..."
 
 pushd "${DATASET_DIR}" > /dev/null
 bash <(curl -fsSL https://raw.githubusercontent.com/mlcommons/r2-downloader/refs/heads/main/mlc-r2-downloader.sh) \
-    https://raw.githubusercontent.com/mlcommons/r2-infra/main/inference/metadata/llama2-70b-dataset-24576.uri
+    https://inference.mlcommons-storage.org/metadata/llama-2-70b-open-orca-dataset.uri
 popd > /dev/null
 
-if [[ ! -f "${DATASET_DIR}/${DATASET_PKL}" ]]; then
-    echo "ERROR: ${DATASET_PKL} not found after download in ${DATASET_DIR}." >&2
-    echo "  The dataset file may have a slightly different name. Check ${DATASET_DIR}/." >&2
+# Locate the downloaded pkl (exact name may differ from expected)
+ACTUAL_PKL=$(find "${DATASET_DIR}" -maxdepth 1 -name "*.pkl" | head -1)
+if [[ -z "$ACTUAL_PKL" ]]; then
+    echo "ERROR: No .pkl file found after download in ${DATASET_DIR}." >&2
     ls "${DATASET_DIR}/" || true
     exit 1
+fi
+
+# Normalise to the expected filename so the run script can hardcode the path
+if [[ "$(basename "$ACTUAL_PKL")" != "$DATASET_PKL" ]]; then
+    mv "$ACTUAL_PKL" "${DATASET_DIR}/${DATASET_PKL}"
 fi
 
 echo "  OK: ${DATASET_DIR}/${DATASET_PKL}"
