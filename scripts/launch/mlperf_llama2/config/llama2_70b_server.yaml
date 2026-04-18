@@ -9,4 +9,4 @@ max_output_tokens: 1024
 system_id: linux_a100_vllm
 min_duration_ms: 120000
 target_qps: 0.5
-max_query_count: 200
+max_query_count: 20
