@@ -46,10 +46,10 @@ class SUT:
             assert False, "torch gpu is not available, exiting..."
 
         self.dataset_path = dataset_path
-        # llama2-70b Dataset constructor: Dataset(dataset_path, total_count_override)
         self.data_object = Dataset(
+            model_name=self.model_path,
             dataset_path=self.dataset_path,
-            total_count_override=total_sample_count,
+            total_sample_count=total_sample_count,
         )
         self.qsl = lg.ConstructQSL(
             self.data_object.total_sample_count,
