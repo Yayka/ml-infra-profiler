@@ -233,8 +233,13 @@ class SUTServer(SUT):
 
     async def _run_query(self, qitem):
         """Run a single query entirely within the persistent engine event loop."""
-        input_ids_tensor = TokensPrompt(
-            prompt_token_ids=self.data_object.input_ids[qitem.index])
+        raw = self.data_object.input_ids[qitem.index]
+        # dataset.py may return numpy arrays or tensors; vLLM requires a plain list of ints
+        if hasattr(raw, 'tolist'):
+            token_ids = raw.tolist()
+        else:
+            token_ids = list(map(int, raw))
+        input_ids_tensor = TokensPrompt(prompt_token_ids=token_ids)
         results_generator = self.model.generate(
             prompt=input_ids_tensor,
             sampling_params=self.sampling_params,
