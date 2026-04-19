@@ -234,11 +234,8 @@ class SUTServer(SUT):
     async def _run_query(self, qitem):
         """Run a single query entirely within the persistent engine event loop."""
         raw = self.data_object.input_ids[qitem.index]
-        # dataset.py may return numpy arrays or tensors; vLLM requires a plain list of ints
-        if hasattr(raw, 'tolist'):
-            token_ids = raw.tolist()
-        else:
-            token_ids = list(map(int, raw))
+        # dataset.py stores tensors of shape (1, seq_len); squeeze batch dim and convert to list
+        token_ids = raw.squeeze(0).tolist()
         input_ids_tensor = TokensPrompt(prompt_token_ids=token_ids)
         results_generator = self.model.generate(
             prompt=input_ids_tensor,
