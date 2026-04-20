@@ -79,7 +79,11 @@ model:
   global_batch_size: 8
   micro_batch_size: 2
 
-  # Parallelism — EP=4 to match 4 GPUs
+  # Required for expert parallelism
+  megatron_amp_O2: true
+  use_distributed_optimizer: true
+
+  # Parallelism — EP=2 to match 2 GPUs
   tensor_model_parallel_size: 1
   pipeline_model_parallel_size: 1
   expert_model_parallel_size: 2
