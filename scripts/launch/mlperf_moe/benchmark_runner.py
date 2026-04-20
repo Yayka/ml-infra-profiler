@@ -43,9 +43,11 @@ def build_nemo_command(config: dict, config_path: str) -> list[str]:
         "python3", "/opt/NeMo/examples/nlp/language_modeling/megatron_gpt_pretraining.py",
         f"--config-path={config_file.parent}",
         f"--config-name={config_file.name}",
-        # NeMo's structured schema overrides YAML exp_manager values; force them here.
+        # NeMo's structured schema overrides YAML values; force critical keys here.
         "exp_manager.create_tensorboard_logger=false",
         "exp_manager.create_checkpoint_callback=false",
+        "model.mcore_gpt=true",
+        "model.transformer_engine=true",
     ]
     return cmd
 
