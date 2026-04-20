@@ -53,6 +53,7 @@ def build_nemo_command(config: dict, config_path: str) -> list[str]:
         "model.optim.name=mcore_distributed_optim",
         "+model.seed=1234",
         "+model.data.index_mapping_dir=null",
+        "+model.data.data_prefix=[/data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-train.en_6_text_document]",
     ]
     return cmd
 

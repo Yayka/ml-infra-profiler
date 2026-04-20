@@ -98,7 +98,9 @@ model:
 
   gradient_as_bucket_view: true
 
-  # Data
+  seed: 1234
+
+  # Data — mcore_gpt uses data_prefix + splits_string (not train/val/test_data_prefix)
   data:
     data_impl: mmap
     splits_string: "99,1,0"
@@ -109,12 +111,9 @@ model:
     reset_position_ids: false
     reset_attention_mask: false
     eod_mask_loss: false
-    train_data_prefix:
+    index_mapping_dir: null
+    data_prefix:
       - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-train.en_6_text_document
-    validation_data_prefix:
-      - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document
-    test_data_prefix:
-      - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document
 
   # Tokenizer — Llama 3.1 HuggingFace tokenizer files
   # Download with: huggingface_hub.snapshot_download('meta-llama/Meta-Llama-3.1-8B',
