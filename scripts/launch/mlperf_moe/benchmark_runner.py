@@ -50,7 +50,7 @@ def build_nemo_command(config: dict, config_path: str) -> list[str]:
         "model.transformer_engine=true",
         "model.megatron_amp_O2=true",
         "model.use_distributed_optimizer=true",
-        "+model.use_mcore_dist_optim=true",
+        "model.optim.name=mcore_distributed_optim",
     ]
     return cmd
 

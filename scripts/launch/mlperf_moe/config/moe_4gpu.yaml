@@ -127,7 +127,7 @@ model:
 
   # Optimizer — matches MLPerf reference
   optim:
-    name: distributed_fused_adam
+    name: mcore_distributed_optim
     lr: 4.0e-4
     weight_decay: 0.1
     betas:
