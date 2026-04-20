@@ -52,6 +52,7 @@ def build_nemo_command(config: dict, config_path: str) -> list[str]:
         "model.use_distributed_optimizer=true",
         "model.optim.name=mcore_distributed_optim",
         "+model.seed=1234",
+        "+model.data.index_mapping_dir=null",
     ]
     return cmd
 
