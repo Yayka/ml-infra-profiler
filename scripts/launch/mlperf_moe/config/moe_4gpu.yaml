@@ -49,6 +49,10 @@ exp_manager:
     mode: min
 
 model:
+  # Use Megatron-Core path (required for expert parallelism with Mcore distributed optimizer)
+  mcore_gpt: true
+  transformer_engine: true
+
   # Architecture — GPT-OSS-20B MoE (MLPerf Small LLM MoE Pretraining)
   num_layers: 24
   hidden_size: 2880
