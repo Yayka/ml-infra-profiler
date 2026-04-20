@@ -108,10 +108,10 @@ model:
     test_data_prefix:
       - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document
 
-  # Tokenizer — Llama3 SentencePiece model from MLCommons download
+  # Tokenizer — Llama 3.1 uses HuggingFace tiktoken tokenizer, not SentencePiece
   tokenizer:
-    library: sentencepiece
-    model: /data/c4/llama3_1_8b_tokenizer/original/tokenizer.model
+    library: huggingface
+    type: /data/c4/llama3_1_8b_tokenizer/original
 
   # Optimizer — matches MLPerf reference
   optim:
