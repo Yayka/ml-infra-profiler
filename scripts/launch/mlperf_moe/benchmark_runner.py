@@ -48,6 +48,8 @@ def build_nemo_command(config: dict, config_path: str) -> list[str]:
         "exp_manager.create_checkpoint_callback=false",
         "model.mcore_gpt=true",
         "model.transformer_engine=true",
+        "model.megatron_amp_O2=true",
+        "model.use_distributed_optimizer=true",
     ]
     return cmd
 
