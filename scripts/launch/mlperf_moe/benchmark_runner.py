@@ -94,8 +94,8 @@ def run_training(config: dict, log_dir: Path, config_path: str) -> list[dict]:
         try:
             import wandb
             wandb_module = wandb
-        except ImportError:
-            print("  WARNING: wandb not installed; metrics logged to CSV only.")
+        except Exception as e:
+            print(f"  WARNING: wandb unavailable ({e}); metrics logged to CSV only.")
 
         # Initialize W&B if available
         wandb_run = None
