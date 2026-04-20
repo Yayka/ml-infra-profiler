@@ -1,0 +1,130 @@
+# moe_4gpu.yaml — MLPerf Small LLM MoE Pretraining (GPT-OSS-20B) adapted for 4 GPUs
+#
+# Reference: MLCommons training/small_llm_moe_pretraining/primus (8-GPU config)
+# Scaling: 8 GPUs → 4 GPUs, expert_parallel_size adjusted accordingly.
+#
+# | Parameter                       | 8-GPU Ref | 4-GPU Adaptation | Reason                                   |
+# |---------------------------------|-----------|------------------|------------------------------------------|
+# | num_nodes                       | 1         | 1                | Single node                              |
+# | devices                         | 8         | 4                | GPUs per node                            |
+# | global_batch_size               | 16        | 16               | Preserve training dynamics               |
+# | micro_batch_size                | 2         | 2                | Fits in A100 80GB with MoE               |
+# | expert_model_parallel_size      | 8         | 4                | Match GPU count                          |
+# | num_experts                     | 32        | 32               | Architecture unchanged                   |
+# | moe_router_topk                 | 4         | 4                | Architecture unchanged                   |
+# | max_steps                       | 1200000   | 200              | Infra profiling run (~3h)                |
+#
+# Convergence target (full run): val_loss <= 3.34 (log perplexity)
+# For infra profiling: max_steps=200 is intentionally short; increase for convergence.
+
+run_name: mlperf-moe-20b-4gpu
+
+trainer:
+  num_nodes: 1
+  devices: 4
+  accelerator: gpu
+  precision: bf16
+  max_steps: 200
+  val_check_interval: 50
+  log_every_n_steps: 5
+  enable_checkpointing: true
+  gradient_clip_val: 1.0
+  num_sanity_val_steps: 0
+
+exp_manager:
+  exp_dir: /results/mlperf_moe
+  name: mlperf-moe-20b-4gpu
+  create_wandb_logger: true
+  wandb_logger_kwargs:
+    project: ml-netprof
+    name: mlperf-moe-20b-4gpu
+    log_model: false
+  create_checkpoint_callback: true
+  checkpoint_callback_params:
+    save_last: true
+    save_top_k: 1
+    monitor: val_loss
+    mode: min
+
+model:
+  # Architecture — GPT-OSS-20B MoE (MLPerf Small LLM MoE Pretraining)
+  num_layers: 24
+  hidden_size: 2880
+  ffn_hidden_size: 2880
+  num_attention_heads: 64
+  num_query_groups: 8             # GQA: 8 key-value heads
+  seq_length: 8192
+  max_position_embeddings: 131072
+  position_embedding_type: rope
+  rotary_base: 150000
+  normalization: rmsnorm
+  norm_epsilon: 1.0e-5
+  do_layer_norm_weight_decay: false
+  bias: false
+  gated_linear_unit: true
+  activation: fast-swiglu
+  hidden_dropout: 0.0
+  attention_dropout: 0.0
+  ffn_dropout: 0.0
+  share_embeddings_and_output_weights: false
+
+  # MoE configuration
+  num_moe_experts: 32
+  moe_router_topk: 4
+  moe_grouped_gemm: true
+
+  # Batch sizes
+  global_batch_size: 16
+  micro_batch_size: 2
+
+  # Parallelism — EP=4 to match 4 GPUs
+  tensor_model_parallel_size: 1
+  pipeline_model_parallel_size: 1
+  expert_model_parallel_size: 4
+
+  # Memory — activation checkpointing for 20B MoE on A100 80GB
+  activations_checkpoint_method: block
+  activations_checkpoint_num_layers: 24
+
+  # Data
+  data:
+    data_impl: mmap
+    splits_string: "99,1,0"
+    seq_length: 8192
+    skip_warmup: true
+    num_workers: 2
+    dataloader_type: single
+    reset_position_ids: false
+    reset_attention_mask: false
+    eod_mask_loss: false
+    train_data_prefix:
+      - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-train.en_6_text_document
+    validation_data_prefix:
+      - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document
+    test_data_prefix:
+      - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document
+
+  # Tokenizer — Llama3 SentencePiece model from MLCommons download
+  tokenizer:
+    library: sentencepiece
+    model: /data/c4/llama3_1_8b_tokenizer/original/tokenizer.model
+
+  # Optimizer — matches MLPerf reference
+  optim:
+    name: distributed_fused_adam
+    lr: 4.0e-4
+    weight_decay: 0.1
+    betas:
+      - 0.9
+      - 0.95
+    sched:
+      name: CosineAnnealing
+      warmup_steps: 50
+      constant_steps: 0
+      min_lr: 4.0e-5
+
+# Convergence target — MLPerf spec: val_loss <= 3.34 (log perplexity)
+convergence:
+  target_val_loss: 3.34
+  eval_frequency_samples: 12288
+  eval_samples: 1024
