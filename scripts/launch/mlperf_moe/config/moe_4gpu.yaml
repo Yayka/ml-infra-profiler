@@ -108,10 +108,12 @@ model:
     test_data_prefix:
       - /data/c4/llama3_1_8b_preprocessed_c4_dataset/c4-validation-91205-samples.en_text_document
 
-  # Tokenizer — Llama 3.1 uses HuggingFace tiktoken tokenizer, not SentencePiece
+  # Tokenizer — Llama 3.1 tiktoken tokenizer via HuggingFace hub
+  # Requires HF_TOKEN env var in the container (meta-llama is gated)
   tokenizer:
     library: huggingface
-    type: /data/c4/llama3_1_8b_tokenizer/original
+    type: meta-llama/Meta-Llama-3.1-8B
+    use_fast: true
 
   # Optimizer — matches MLPerf reference
   optim:
