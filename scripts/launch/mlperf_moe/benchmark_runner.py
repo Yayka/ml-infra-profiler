@@ -40,7 +40,7 @@ def build_nemo_command(config: dict, config_path: str) -> list[str]:
     """
     config_file = Path(config_path).resolve()
     cmd = [
-        "python", "/opt/NeMo/examples/nlp/language_modeling/megatron_gpt_pretraining.py",
+        "python3", "/opt/NeMo/examples/nlp/language_modeling/megatron_gpt_pretraining.py",
         f"--config-path={config_file.parent}",
         f"--config-name={config_file.name}",
     ]
