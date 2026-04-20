@@ -30,11 +30,13 @@ trainer:
   enable_checkpointing: true
   gradient_clip_val: 1.0
   num_sanity_val_steps: 0
+  logger: false
 
 exp_manager:
   exp_dir: /results/mlperf_moe
   name: mlperf-moe-20b-4gpu
-  create_wandb_logger: true
+  create_tensorboard_logger: false
+  create_wandb_logger: false
   wandb_logger_kwargs:
     project: ml-netprof
     name: mlperf-moe-20b-4gpu
