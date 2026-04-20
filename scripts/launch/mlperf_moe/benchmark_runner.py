@@ -32,57 +32,18 @@ def load_config(path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def build_nemo_command(config: dict) -> list[str]:
-    """Build the NeMo pretraining command from config."""
-    model = config["model"]
-    trainer = config["trainer"]
+def build_nemo_command(config: dict, config_path: str) -> list[str]:
+    """Build the NeMo pretraining command from config.
 
+    Passes the full YAML via Hydra --config-path/--config-name so that
+    all top-level keys (including exp_manager) are present in cfg.
+    """
+    config_file = Path(config_path).resolve()
     cmd = [
-        "python", "-m", "nemo.collections.nlp.models.language_modeling.megatron_gpt_pretraining",
-        f"trainer.num_nodes={trainer['num_nodes']}",
-        f"trainer.devices={trainer['devices']}",
-        f"trainer.accelerator={trainer['accelerator']}",
-        f"trainer.precision={trainer['precision']}",
-        f"trainer.max_steps={trainer['max_steps']}",
-        f"trainer.val_check_interval={trainer['val_check_interval']}",
-        f"trainer.log_every_n_steps={trainer['log_every_n_steps']}",
-        f"trainer.gradient_clip_val={trainer['gradient_clip_val']}",
-        f"trainer.num_sanity_val_steps={trainer['num_sanity_val_steps']}",
-        f"model.num_layers={model['num_layers']}",
-        f"model.hidden_size={model['hidden_size']}",
-        f"model.ffn_hidden_size={model['ffn_hidden_size']}",
-        f"model.num_attention_heads={model['num_attention_heads']}",
-        f"model.num_query_groups={model['num_query_groups']}",
-        f"model.seq_length={model['seq_length']}",
-        f"model.max_position_embeddings={model['max_position_embeddings']}",
-        f"model.global_batch_size={model['global_batch_size']}",
-        f"model.micro_batch_size={model['micro_batch_size']}",
-        f"model.tensor_model_parallel_size={model['tensor_model_parallel_size']}",
-        f"model.pipeline_model_parallel_size={model['pipeline_model_parallel_size']}",
-        f"model.expert_model_parallel_size={model['expert_model_parallel_size']}",
-        f"model.num_moe_experts={model['num_moe_experts']}",
-        f"model.moe_router_topk={model['moe_router_topk']}",
-        f"model.activations_checkpoint_method={model['activations_checkpoint_method']}",
-        f"model.activations_checkpoint_num_layers={model['activations_checkpoint_num_layers']}",
-        f"model.optim.lr={model['optim']['lr']}",
-        f"model.optim.weight_decay={model['optim']['weight_decay']}",
-        f"model.optim.sched.warmup_steps={model['optim']['sched']['warmup_steps']}",
-        f"model.optim.sched.min_lr={model['optim']['sched']['min_lr']}",
-        f"model.data.train_data_prefix={model['data']['train_data_prefix']}",
-        f"model.data.validation_data_prefix={model['data']['validation_data_prefix']}",
-        f"model.tokenizer.model={model['tokenizer']['model']}",
+        "python", "/opt/NeMo/examples/nlp/language_modeling/megatron_gpt_pretraining.py",
+        f"--config-path={config_file.parent}",
+        f"--config-name={config_file.name}",
     ]
-
-    # W&B logger
-    exp = config.get("exp_manager", {})
-    if exp.get("create_wandb_logger"):
-        wandb_kwargs = exp.get("wandb_logger_kwargs", {})
-        cmd.extend([
-            "exp_manager.create_wandb_logger=true",
-            f"exp_manager.wandb_logger_kwargs.project={wandb_kwargs.get('project', 'ml-netprof')}",
-            f"exp_manager.wandb_logger_kwargs.name={wandb_kwargs.get('name', config.get('run_name', 'mlperf-moe'))}",
-        ])
-
     return cmd
 
 
@@ -118,9 +79,9 @@ def parse_nemo_log_line(line: str) -> dict | None:
     return metrics
 
 
-def run_training(config: dict, log_dir: Path) -> list[dict]:
+def run_training(config: dict, log_dir: Path, config_path: str) -> list[dict]:
     """Run NeMo pretraining and capture metrics from stdout."""
-    cmd = build_nemo_command(config)
+    cmd = build_nemo_command(config, config_path)
     all_metrics = []
 
     print(f"\nLaunching NeMo MoE pretraining...")
@@ -277,7 +238,7 @@ def main() -> int:
     print(f"  Results dir: {results_dir}")
 
     # Run training
-    metrics = run_training(config, log_dir)
+    metrics = run_training(config, log_dir, args.config)
 
     # Save results
     print("\nSaving results...")

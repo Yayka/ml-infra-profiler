@@ -21,7 +21,7 @@ run_name: mlperf-moe-20b-4gpu
 
 trainer:
   num_nodes: 1
-  devices: 4
+  devices: 2
   accelerator: gpu
   precision: bf16
   max_steps: 200
@@ -74,17 +74,19 @@ model:
   moe_grouped_gemm: true
 
   # Batch sizes
-  global_batch_size: 16
+  global_batch_size: 8
   micro_batch_size: 2
 
   # Parallelism — EP=4 to match 4 GPUs
   tensor_model_parallel_size: 1
   pipeline_model_parallel_size: 1
-  expert_model_parallel_size: 4
+  expert_model_parallel_size: 2
 
   # Memory — activation checkpointing for 20B MoE on A100 80GB
   activations_checkpoint_method: block
   activations_checkpoint_num_layers: 24
+
+  gradient_as_bucket_view: true
 
   # Data
   data:
