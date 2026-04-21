@@ -14,6 +14,30 @@ Both modes use the same model, optimizer, data pipeline, and launch command — 
 - `transformers`, `datasets`, `torch` installed in the container/environment
 - Nodes must be able to reach each other on the network (for NCCL and torchrun rendezvous)
 
+## Docker
+
+A `Dockerfile.diloco` is provided at `infra/docker/Dockerfile.diloco`. Build it from the repo root:
+
+```bash
+docker build -f infra/docker/Dockerfile.diloco -t ml-netprof/diloco:latest .
+```
+
+The image is based on `pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel` and includes `transformers`, `datasets`, and `accelerate`. The training script is baked in at `/workspace/train_llama8b.py` and the image `ENTRYPOINT` is `torchrun`, so pass torchrun flags directly to `docker run`.
+
+**Multi-node example** (run on each node, adjust `--node-rank` and `MASTER_ADDR`):
+
+```bash
+docker run --rm --gpus all --ipc=host --network=host \
+  ml-netprof/diloco:latest \
+  --nnodes=2 --nproc_per_node=2 --node-rank=0 \
+  --master-addr=<NODE0_INTERNAL_IP> --master-port=29500 \
+  /workspace/train_llama8b.py \
+  --fake-data --max-steps 10 --total-batch-size 8 \
+  --per-device-train-batch-size 1 --seq-length 512
+```
+
+`--network=host` is required so NCCL and the torchrun rendezvous can reach the other node directly over the cluster network. Use each node's internal (VNet) IP as `MASTER_ADDR`, not the public IP.
+
 ## Quick Start — Smoke Test
 
 Verify the script works on your cluster using fake data (no dataset download needed).

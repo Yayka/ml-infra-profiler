@@ -1,0 +1,12 @@
+FROM pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel
+
+WORKDIR /workspace
+
+RUN pip install --no-cache-dir \
+    transformers==4.45.2 \
+    datasets==3.1.0 \
+    accelerate==1.1.1
+
+COPY scripts/launch/diloco/train_llama8b.py /workspace/train_llama8b.py
+
+ENTRYPOINT ["torchrun"]
