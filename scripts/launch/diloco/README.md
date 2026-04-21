@@ -30,7 +30,7 @@ The image is based on `pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel` and includes
 docker run --rm --gpus all --ipc=host --network=host \
   ml-netprof/diloco:latest \
   --nnodes=2 --nproc_per_node=2 --node-rank=0 \
-  --master-addr=<NODE0_INTERNAL_IP> --master-port=29500 \
+  --master-addr=$MASTER_ADDR --master-port=29500 \
   /workspace/train_llama8b.py \
   --fake-data --max-steps 10 --total-batch-size 8 \
   --per-device-train-batch-size 1 --seq-length 512
