@@ -30,22 +30,13 @@ The image is based on `pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel` and includes
 docker run --rm --gpus all --ipc=host --network=host \
   ml-netprof/diloco:latest \
   --nnodes=2 --nproc_per_node=2 --node-rank=0 \
-  --master-addr=172.21.0.4 --master-port=29500 \
+  --master-addr=<NODE0_INTERNAL_IP> --master-port=29500 \
   /workspace/train_llama8b.py \
   --fake-data --max-steps 10 --total-batch-size 8 \
   --per-device-train-batch-size 1 --seq-length 512
 ```
 
-`--network=host` is required so NCCL and the torchrun rendezvous can reach the other node directly over the cluster network. Use each node's internal (VNet) IP as `--master-addr`, not the public IP.
-
-Our two nodes and their addresses:
-
-| Hostname         | Public IP        | Internal IP  |
-| ---------------- | ---------------- | ------------ |
-| gpu-inter000000  | 20.29.43.19      | 172.21.0.4   |
-| gpu-inter000001  | 172.212.226.225  | 172.21.0.5   |
-
-`gpu-inter000000` (`172.21.0.4`) is used as rank 0 / master in the examples above.
+`--network=host` is required so NCCL and the torchrun rendezvous can reach the other node directly over the cluster network. Use each node's internal (VNet) IP as `MASTER_ADDR`, not the public IP.
 
 ## Quick Start — Smoke Test
 
