@@ -51,7 +51,8 @@ def main():
         size_mb = f.stat().st_size / 1024 / 1024
         print(f"  {f.name}  ({size_mb:.1f} MB)")
     print(
-        "\nnanochat will use train_00.parquet for training, val_00.parquet for validation."
+        "\nnanochat will use train_00.parquet for training, "
+        "val_00.parquet for validation."
     )
 
 if __name__ == "__main__":

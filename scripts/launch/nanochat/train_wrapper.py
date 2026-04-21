@@ -6,7 +6,7 @@ and hands off to nanochat's base_train.
 
 Can be invoked directly or via torchrun:
     python scripts/launch/nanochat/train_wrapper.py [config.yaml]
-    torchrun ... scripts/launch/nanochat/train_wrapper.py --config config.yaml [-- extra]
+    torchrun ... scripts/launch/nanochat/train_wrapper.py --config config.yaml
 """
 
 import os
