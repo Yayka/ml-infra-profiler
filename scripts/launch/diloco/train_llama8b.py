@@ -15,7 +15,6 @@ import os
 import time
 from contextlib import nullcontext
 from functools import partial
-from typing import Literal
 
 import torch
 import torch.distributed as dist
@@ -66,8 +65,10 @@ def parse_args():
     p = argparse.ArgumentParser(description="Llama 3.1 8B FSDP + DiLoCo training")
 
     # Model
-    p.add_argument("--path-model", type=str, default=None,
-                    help="HF model name or local path (if None, creates random-init 8B)")
+    p.add_argument(
+        "--path-model", type=str, default=None,
+        help="HF model name or local path (if None, creates random-init 8B)",
+    )
     p.add_argument("--tokenizer", type=str, default=None,
                     help="Tokenizer name or path (defaults to --path-model)")
     p.add_argument("--seq-length", type=int, default=2048)
