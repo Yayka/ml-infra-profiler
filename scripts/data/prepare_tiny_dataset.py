@@ -22,6 +22,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 TRAIN_ROWS = 50_000
 VAL_ROWS = 5_000
 
+
 def main():
     print(f"Saving parquet files to: {DATA_DIR}")
 
@@ -54,6 +55,7 @@ def main():
         "\nnanochat will use train_00.parquet for training, "
         "val_00.parquet for validation."
     )
+
 
 if __name__ == "__main__":
     main()

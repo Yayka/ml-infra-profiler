@@ -67,11 +67,17 @@ def parse_args():
 
     # Model
     p.add_argument(
-        "--path-model", type=str, default=None,
+        "--path-model",
+        type=str,
+        default=None,
         help="HF model name or local path (if None, creates random-init 8B)",
     )
-    p.add_argument("--tokenizer", type=str, default=None,
-                    help="Tokenizer name or path (defaults to --path-model)")
+    p.add_argument(
+        "--tokenizer",
+        type=str,
+        default=None,
+        help="Tokenizer name or path (defaults to --path-model)",
+    )
     p.add_argument("--seq-length", type=int, default=2048)
     p.add_argument("--attn-implementation", type=str, default="sdpa")
 
@@ -89,17 +95,31 @@ def parse_args():
     p.add_argument("--total-steps", type=int, default=88000)
     p.add_argument("--max-steps", type=int, default=None)
     p.add_argument("--gradient-checkpointing", action="store_true", default=True)
-    p.add_argument("--no-gradient-checkpointing", dest="gradient_checkpointing",
-                    action="store_false")
-    p.add_argument("--precision", type=str, default="bf16-mixed",
-                    choices=["bf16-mixed", "fp16-mixed", "32-true"])
+    p.add_argument(
+        "--no-gradient-checkpointing",
+        dest="gradient_checkpointing",
+        action="store_false",
+    )
+    p.add_argument(
+        "--precision",
+        type=str,
+        default="bf16-mixed",
+        choices=["bf16-mixed", "fp16-mixed", "32-true"],
+    )
     p.add_argument("--torch-compile", action="store_true", default=False)
 
     # DiLoCo
-    p.add_argument("--diloco", action="store_true",
-                    help="Enable DiLoCo (per-node FSDP + periodic outer step)")
-    p.add_argument("--diloco-local-steps", type=int, default=500,
-                    help="Inner optimizer steps between outer syncs")
+    p.add_argument(
+        "--diloco",
+        action="store_true",
+        help="Enable DiLoCo (per-node FSDP + periodic outer step)",
+    )
+    p.add_argument(
+        "--diloco-local-steps",
+        type=int,
+        default=500,
+        help="Inner optimizer steps between outer syncs",
+    )
     p.add_argument("--diloco-outer-lr", type=float, default=0.7)
 
     # Logging
@@ -152,12 +172,15 @@ def get_dataloader(args, tokenizer, world_size, rank, local_rank):
 
         def tokenize_fn(data):
             return tokenizer(
-                data["text"], truncation=True,
-                max_length=args.seq_length, padding="max_length",
+                data["text"],
+                truncation=True,
+                max_length=args.seq_length,
+                padding="max_length",
             )
 
         tokenized = ds.map(
-            tokenize_fn, batched=True,
+            tokenize_fn,
+            batched=True,
             remove_columns=["text", "timestamp", "url"],
         )["train"]
         dataset = split_dataset_by_node(tokenized, world_size=world_size, rank=rank)
@@ -173,7 +196,8 @@ def get_dataloader(args, tokenizer, world_size, rank, local_rank):
         collate_fn = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
     return DataLoader(
-        dataset, collate_fn=collate_fn,
+        dataset,
+        collate_fn=collate_fn,
         batch_size=args.per_device_train_batch_size,
         num_workers=args.num_workers if not args.fake_data else 0,
     )
@@ -193,18 +217,16 @@ class DiLoCoState:
     def __init__(self, model: FSDP, outer_lr: float):
         # Gather full params to CPU on ALL ranks (rank0_only + writeback
         # is not supported in PyTorch <= 2.4)
-        with FSDP.summon_full_params(model, offload_to_cpu=True,
-                                      writeback=False):
-            self.saved_params = [
-                p.data.clone().float() for p in model.parameters()
-            ]
+        with FSDP.summon_full_params(model, offload_to_cpu=True, writeback=False):
+            self.saved_params = [p.data.clone().float() for p in model.parameters()]
             self.outer_params = [
-                nn.Parameter(p.clone(), requires_grad=True)
-                for p in self.saved_params
+                nn.Parameter(p.clone(), requires_grad=True) for p in self.saved_params
             ]
             self.outer_optimizer = torch.optim.SGD(
-                self.outer_params, lr=outer_lr,
-                momentum=0.9, nesterov=True,
+                self.outer_params,
+                lr=outer_lr,
+                momentum=0.9,
+                nesterov=True,
             )
 
 
@@ -226,7 +248,9 @@ def diloco_outer_step(
     live on CPU (NCCL requires CUDA tensors).
     """
     with FSDP.summon_full_params(
-        model, offload_to_cpu=True, writeback=True,
+        model,
+        offload_to_cpu=True,
+        writeback=True,
     ):
         # 1. Compute pseudo-gradients and all-reduce across all ranks.
         #    Within a node, ranks have identical params (FSDP keeps them
@@ -284,7 +308,8 @@ def train(args):
     # ---- Process groups / device mesh -------------------------------------
     if args.diloco:
         mesh = init_device_mesh(
-            "cuda", (nnodes, local_world_size),
+            "cuda",
+            (nnodes, local_world_size),
             mesh_dim_names=("replicate", "shard"),
         )
         fsdp_mesh = mesh["shard"]
@@ -292,8 +317,10 @@ def train(args):
         # (NCCL only works on CUDA tensors; pseudo-grads live on CPU)
         outer_gloo_pg = dist.new_group(backend="gloo")
         if rank == 0:
-            print(f"DiLoCo: {nnodes} islands, {local_world_size} GPUs/island, "
-                  f"local_steps={args.diloco_local_steps}")
+            print(
+                f"DiLoCo: {nnodes} islands, {local_world_size} GPUs/island, "
+                f"local_steps={args.diloco_local_steps}"
+            )
     else:
         fsdp_mesh = None
         outer_gloo_pg = None
@@ -307,16 +334,19 @@ def train(args):
     else:
         island_size = world_size
 
-    assert args.total_batch_size % island_size == 0, \
-        f"total_batch_size ({args.total_batch_size}) must be divisible by " \
+    assert args.total_batch_size % island_size == 0, (
+        f"total_batch_size ({args.total_batch_size}) must be divisible by "
         f"island_size ({island_size})"
+    )
     per_rank_batch = args.total_batch_size // island_size
     assert per_rank_batch % args.per_device_train_batch_size == 0
     grad_accum_steps = per_rank_batch // args.per_device_train_batch_size
 
     if rank == 0:
-        print(f"Batch: total={args.total_batch_size}, per_rank={per_rank_batch}, "
-              f"mbs={args.per_device_train_batch_size}, grad_accum={grad_accum_steps}")
+        print(
+            f"Batch: total={args.total_batch_size}, per_rank={per_rank_batch}, "
+            f"mbs={args.per_device_train_batch_size}, grad_accum={grad_accum_steps}"
+        )
 
     # ---- Tokenizer ---------------------------------------------------------
     tokenizer_name = args.tokenizer or args.path_model
@@ -348,11 +378,15 @@ def train(args):
         transformer_auto_wrap_policy,
         transformer_layer_cls={LlamaDecoderLayer},
     )
-    mp = MixedPrecision(
-        param_dtype=amp_dtype,
-        reduce_dtype=amp_dtype,
-        buffer_dtype=amp_dtype,
-    ) if use_amp else None
+    mp = (
+        MixedPrecision(
+            param_dtype=amp_dtype,
+            reduce_dtype=amp_dtype,
+            buffer_dtype=amp_dtype,
+        )
+        if use_amp
+        else None
+    )
 
     model = FSDP(
         model,
@@ -370,8 +404,10 @@ def train(args):
 
     # ---- Optimizers / scheduler -------------------------------------------
     inner_optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.lr,
-        weight_decay=args.weight_decay, betas=(0.9, 0.95),
+        model.parameters(),
+        lr=args.lr,
+        weight_decay=args.weight_decay,
+        betas=(0.9, 0.95),
     )
     scheduler = get_cosine_schedule_with_warmup(
         inner_optimizer,
@@ -386,8 +422,10 @@ def train(args):
         if rank == 0:
             n_outer_params = sum(p.numel() for p in diloco_state.outer_params)
             cpu_gb = n_outer_params * 4 * 3 / 1e9  # fp32, 3 copies
-            print(f"DiLoCo outer optimizer: {n_outer_params/1e9:.2f}B params, "
-                  f"~{cpu_gb:.1f} GB CPU per rank (params+momentum+snapshot)")
+            print(
+                f"DiLoCo outer optimizer: {n_outer_params / 1e9:.2f}B params, "
+                f"~{cpu_gb:.1f} GB CPU per rank (params+momentum+snapshot)"
+            )
 
     # ---- Training loop -----------------------------------------------------
     model.train()
@@ -428,24 +466,31 @@ def train(args):
         # --- DiLoCo outer step ---
         if args.diloco and real_step % args.diloco_local_steps == 0 and real_step > 0:
             t0 = time.time()
-            diloco_outer_step(model, diloco_state, outer_gloo_pg,
-                              world_size, nnodes)
+            diloco_outer_step(model, diloco_state, outer_gloo_pg, world_size, nnodes)
             if rank == 0:
-                print(f"  [DiLoCo] outer step at inner_step={real_step} "
-                      f"({time.time()-t0:.1f}s)")
+                print(
+                    f"  [DiLoCo] outer step at inner_step={real_step} "
+                    f"({time.time() - t0:.1f}s)"
+                )
 
         # --- Logging ---
         if rank == 0 and real_step % args.log_every_n_steps == 0:
             elapsed = time.time() - step_time
-            tokens_per_sec = (args.seq_length * args.total_batch_size *
-                              args.log_every_n_steps / elapsed)
+            tokens_per_sec = (
+                args.seq_length
+                * args.total_batch_size
+                * args.log_every_n_steps
+                / elapsed
+            )
             lr_now = scheduler.get_last_lr()[0]
             ppl = torch.exp(loss_batch).item()
 
-            print(f"step {real_step:>6d} | loss {loss_batch.item():.4f} | "
-                  f"ppl {ppl:.2f} | lr {lr_now:.2e} | "
-                  f"tok/s {tokens_per_sec:.0f} | "
-                  f"elapsed {elapsed:.1f}s")
+            print(
+                f"step {real_step:>6d} | loss {loss_batch.item():.4f} | "
+                f"ppl {ppl:.2f} | lr {lr_now:.2e} | "
+                f"tok/s {tokens_per_sec:.0f} | "
+                f"elapsed {elapsed:.1f}s"
+            )
 
             step_time = time.time()
 
