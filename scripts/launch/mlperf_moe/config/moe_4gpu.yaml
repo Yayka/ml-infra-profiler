@@ -58,8 +58,8 @@ model:
   num_layers: 16
   hidden_size: 2880
   ffn_hidden_size: 2880
-  num_attention_heads: 64
-  num_query_groups: 8             # GQA: 8 key-value heads
+  num_attention_heads: 32
+  num_query_groups: 8             # GQA: 8 key-value heads (32/8 = 4 queries per KV head)
   seq_length: 8192
   max_position_embeddings: 131072
   position_embedding_type: rope
