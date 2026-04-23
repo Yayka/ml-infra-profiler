@@ -54,7 +54,7 @@ model:
   transformer_engine: true
 
   # Architecture — GPT-OSS-20B MoE (MLPerf Small LLM MoE Pretraining)
-  num_layers: 24
+  num_layers: 16
   hidden_size: 2880
   ffn_hidden_size: 2880
   num_attention_heads: 64
@@ -94,7 +94,7 @@ model:
 
   # Memory — activation checkpointing for 20B MoE on A100 80GB
   activations_checkpoint_method: block
-  activations_checkpoint_num_layers: 24
+  activations_checkpoint_num_layers: 16
 
   gradient_as_bucket_view: true
 
