@@ -31,6 +31,7 @@ trainer:
   gradient_clip_val: 1.0
   num_sanity_val_steps: 0
   logger: false
+  use_distributed_sampler: false
 
 exp_manager:
   exp_dir: /results/mlperf_moe
