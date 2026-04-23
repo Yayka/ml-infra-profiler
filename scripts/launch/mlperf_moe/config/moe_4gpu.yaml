@@ -132,6 +132,9 @@ model:
     betas:
       - 0.9
       - 0.95
+    # With use_distributed_optimizer=True, gradient averaging happens in the
+    # optimizer step — not in DDP allreduce. Must be False.
+    average_in_collective: false
     sched:
       name: CosineAnnealing
       warmup_steps: 50
