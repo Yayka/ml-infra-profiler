@@ -77,7 +77,7 @@ model:
   # MoE configuration
   num_moe_experts: 32
   moe_router_topk: 4
-  moe_grouped_gemm: true
+  moe_grouped_gemm: false
 
   # Batch sizes
   global_batch_size: 8
