@@ -2,7 +2,9 @@
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
         setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
         build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference \
-        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2
+        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 \
+        setup-mlperf-moe prepare-mlperf-moe-data run-mlperf-moe verify-mlperf-moe \
+        setup-mlperf-resnet prepare-mlperf-resnet-data run-mlperf-resnet verify-mlperf-resnet
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -144,6 +146,71 @@ prepare-mlperf-llama2-data:
 # Run Server performance benchmark (vLLM, 2x A100)
 run-mlperf-llama2:
 	bash scripts/launch/mlperf_llama2/run_mlperf_llama2.sh
+
+# --- MLPerf Small LLM MoE Pretraining (GPT-OSS-20B) ---
+
+# Create .venv-moe with NeMo deps (or use nvcr.io/nvidia/nemo:24.12-rc0 container directly)
+setup-mlperf-moe:
+	python3 -m venv .venv-moe
+	.venv-moe/bin/pip install --upgrade pip
+	.venv-moe/bin/pip install pyyaml wandb
+	@echo ""
+	@echo "NOTE: NeMo is best run inside the official container."
+	@echo "  docker pull nvcr.io/nvidia/nemo:24.12-rc0"
+	@echo "  Or install NeMo in venv: .venv-moe/bin/pip install nemo_toolkit[all]"
+
+# Download/prepare C4 dataset for MoE pretraining (~80 GB, same as MLPerf Llama3.1 8B).
+# Reuses prepare_c4_mlperf.sh — skip if you already ran make prepare-mlperf-data.
+prepare-mlperf-moe-data:
+	bash scripts/data/prepare_c4_mlperf.sh
+
+# Run MoE pretraining benchmark (4 GPUs, EP=4, 200 steps for infra profiling)
+run-mlperf-moe:
+	@mkdir -p logs results/mlperf_moe
+	python scripts/launch/mlperf_moe/benchmark_runner.py \
+		--config scripts/launch/mlperf_moe/config/moe_4gpu.yaml \
+		--log-dir logs/mlperf_moe_$$(date +%Y%m%d_%H%M%S) \
+		--results-dir results/mlperf_moe
+
+# Check whether MoE run met val_loss <= 3.34 convergence target
+verify-mlperf-moe:
+	bash scripts/launch/mlperf_moe/verify_run.sh
+
+# --- MLPerf Training ResNet-50 v1.5 (TF2, ImageNet, multi-GPU) ---
+
+# Create .venv-resnet with TF 2.14 + deps (separate from main .venv — TF conflicts with torch)
+setup-mlperf-resnet:
+	python3 -m venv .venv-resnet
+	.venv-resnet/bin/pip install --upgrade pip
+	.venv-resnet/bin/pip install tensorflow==2.14.0 wandb pyyaml Pillow
+
+# Download ImageNet ILSVRC2012 and convert to TFRecord format (~150 GB).
+# ImageNet requires manual download (academic license). See RUNBOOK for details.
+prepare-mlperf-resnet-data:
+	@echo "=== ImageNet ILSVRC2012 Data Preparation ==="
+	@echo ""
+	@echo "ImageNet requires manual download (academic license)."
+	@echo ""
+	@echo "1. Register at https://image-net.org"
+	@echo "2. Download ILSVRC2012_img_train.tar (~138 GB) and ILSVRC2012_img_val.tar (~6.3 GB)"
+	@echo "3. Extract:"
+	@echo "     mkdir -p data/imagenet/raw/{train,val}"
+	@echo "     tar -xf ILSVRC2012_img_train.tar -C data/imagenet/raw/train/"
+	@echo "     tar -xf ILSVRC2012_img_val.tar -C data/imagenet/raw/val/"
+	@echo "4. Convert to TFRecord format:"
+	@echo "     source .venv-resnet/bin/activate"
+	@echo "     python scripts/data/imagenet_to_tfrecord.py \\"
+	@echo "       --raw-dir data/imagenet/raw --output-dir data/imagenet/tfrecord"
+	@echo ""
+	@echo "See scripts/launch/mlperf_resnet/RUNBOOK.md for full details."
+
+# Run ResNet-50 v1.5 training benchmark (4 GPUs, ~6-12 hours)
+run-mlperf-resnet:
+	bash scripts/launch/mlperf_resnet/run_mlperf_resnet.sh
+
+# Check top-1 accuracy >= 75.9% from result.txt
+verify-mlperf-resnet:
+	bash scripts/launch/mlperf_resnet/verify_run.sh
 
 # --- ml-netprof monitoring agent ---
 
