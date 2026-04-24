@@ -1,0 +1,99 @@
+# t2i_4gpu.yaml — MLPerf Training v5.0 Text-to-Image (Flux.1-schnell) for 2 nodes x 2 GPUs
+#
+# Reference: https://github.com/mlcommons/training/tree/master/text_to_image
+# Model: Flux.1-schnell (~11.9B params), fine-tuned on CC12M subset (1.1M images)
+# Target: validation loss <= 0.586 (MSE over latents, averaged across 8 timesteps)
+#
+# Hardware: 2 Azure A100 80GB nodes x 2 GPUs each (4 GPUs total)
+# Parallelism: FSDP across all 4 GPUs (no TP/PP — diffusion transformer is straightforward to shard)
+# Expected runtime: ~24-48h depending on network bandwidth
+#
+# | Parameter                      | 8-GPU Ref | 4-GPU Adaptation | Reason                                   |
+# |--------------------------------|-----------|------------------|------------------------------------------|
+# | num_nodes                      | 1         | 2                | 2 nodes x 2 GPUs                         |
+# | gpus_per_node                  | 8         | 2                | GPUs per node                            |
+# | batch_size_per_gpu             | 4         | 4                | Preserved; fits in 80GB with FSDP        |
+# | global_batch_size (effective)  | 32        | 16               | 4 GPUs x 4 = 16; same lr scaling applies |
+# | gradient_accumulation_steps    | 1         | 2                | Compensate for fewer GPUs: 16*2=32 eff.  |
+# | learning_rate                  | 1e-4      | 1e-4             | Preserved with linear scaling             |
+# | eval_every_n_samples           | 262144    | 262144           | Same eval frequency per MLPerf spec      |
+
+run_name: mlperf-t2i-flux-4gpu
+
+# --- Hardware ---
+hardware:
+  num_nodes: 2
+  gpus_per_node: 2
+  accelerator: gpu
+  precision: bf16
+
+# --- Model ---
+model:
+  name: flux1-schnell
+  pretrained_path: /data/mlperf_t2i/models/flux1-schnell
+  # Frozen encoders (downloaded separately)
+  clip_model: openai/clip-vit-large-patch14
+  t5_model: google/t5-v1_1-xxl
+  vae_model: black-forest-labs/FLUX.1-schnell
+  image_resolution: 256
+
+# --- Dataset ---
+data:
+  train_data_dir: /data/mlperf_t2i/cc12m_256
+  val_data_dir: /data/mlperf_t2i/coco2014_256
+  val_samples: 29696
+  train_samples: 1099776
+  num_workers: 4
+  pin_memory: true
+
+# --- Training ---
+training:
+  batch_size_per_gpu: 4
+  gradient_accumulation_steps: 2
+  max_steps: 20000
+  seed: 42
+  mixed_precision: bf16
+  gradient_checkpointing: true
+  compile_model: false          # torch.compile — disable for initial runs
+
+# --- Optimizer ---
+optimizer:
+  name: adamw
+  lr: 1.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+# --- LR Schedule ---
+lr_schedule:
+  name: cosine
+  warmup_steps: 500
+  min_lr: 1.0e-6
+
+# --- Evaluation ---
+evaluation:
+  eval_every_n_samples: 262144    # per MLPerf spec
+  val_timesteps: 8                # 8 equidistant timesteps [0, 7/8]
+  convergence_target: 0.586       # validation loss <= this to converge
+
+# --- Distributed ---
+distributed:
+  strategy: fsdp                  # Fully Sharded Data Parallel
+  nccl_transport: tcp             # Azure Ethernet (no InfiniBand)
+  master_port: 29500
+
+# --- Logging ---
+logging:
+  log_every_n_steps: 10
+  wandb:
+    enabled: true
+    project: ml-netprof
+    name: mlperf-t2i-flux-4gpu
+    log_model: false
+
+# --- Output ---
+output:
+  results_dir: results/mlperf_t2i
+  checkpoint_dir: /results/mlperf_t2i/checkpoints
+  save_last: true
+  save_top_k: 1
