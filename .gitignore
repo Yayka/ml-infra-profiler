@@ -1,7 +1,6 @@
 .env
 wandb/
 /data/
-results/
 .venv/
 __pycache__/
 .claude/worktrees/
