@@ -6,7 +6,7 @@ and hands off to nanochat's base_train.
 
 Can be invoked directly or via torchrun:
     python scripts/launch/nanochat/train_wrapper.py [config.yaml]
-    torchrun ... scripts/launch/nanochat/train_wrapper.py --config config.yaml [-- extra flags]
+    torchrun ... scripts/launch/nanochat/train_wrapper.py --config config.yaml
 """
 
 import os
@@ -60,7 +60,7 @@ def main() -> None:
     if "--config" in args:
         idx = args.index("--config")
         config_path = Path(args[idx + 1])
-        args = args[:idx] + args[idx + 2:]
+        args = args[:idx] + args[idx + 2 :]
     elif args and not args[0].startswith("-"):
         # Positional config path (backwards-compat with run_local.py usage)
         config_path = Path(args[0])
@@ -68,7 +68,7 @@ def main() -> None:
 
     if "--" in args:
         idx = args.index("--")
-        extra_flags = args[idx + 1:]
+        extra_flags = args[idx + 1 :]
 
     run(config_path, extra_flags)
 

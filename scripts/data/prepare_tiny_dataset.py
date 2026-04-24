@@ -12,6 +12,7 @@ Usage (from repo root):
 """
 
 import pathlib
+
 import datasets
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -20,6 +21,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 TRAIN_ROWS = 50_000
 VAL_ROWS = 5_000
+
 
 def main():
     print(f"Saving parquet files to: {DATA_DIR}")
@@ -49,7 +51,11 @@ def main():
     for f in sorted(DATA_DIR.glob("*.parquet")):
         size_mb = f.stat().st_size / 1024 / 1024
         print(f"  {f.name}  ({size_mb:.1f} MB)")
-    print("\nnanochat will use train_00.parquet for training, val_00.parquet for validation.")
+    print(
+        "\nnanochat will use train_00.parquet for training, "
+        "val_00.parquet for validation."
+    )
+
 
 if __name__ == "__main__":
     main()
