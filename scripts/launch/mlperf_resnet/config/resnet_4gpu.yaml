@@ -1,0 +1,49 @@
+# MLPerf Training — ResNet-50 v1.5 on ImageNet (4 GPU)
+#
+# Reference: https://github.com/mlcommons/training/tree/master/retired_benchmarks/resnet-tf2
+# Convergence target: top-1 validation accuracy >= 75.9%
+
+model: resnet50_v1.5
+num_classes: 1000
+
+# Data
+data_dir: data/imagenet/tfrecord       # TFRecord files (train-* and validation-*)
+num_train_images: 1281167              # ImageNet ILSVRC2012 training set
+num_val_images: 50000                  # ImageNet ILSVRC2012 validation set
+
+# Training
+batch_size_per_gpu: 128                # Per-GPU batch size (effective = batch_size_per_gpu * num_gpus)
+num_gpus: 4
+epochs: 90
+dtype: float16                         # Mixed precision (FP16 compute, FP32 master weights)
+
+# Optimizer: SGD with momentum
+base_lr: 0.1                           # Scaled linearly: actual_lr = base_lr * (total_batch / 256)
+warmup_epochs: 5                       # Linear LR warmup
+momentum: 0.9
+weight_decay: 0.0001                   # L2 regularization
+label_smoothing: 0.1                   # Label smoothing factor
+
+# LR schedule: piecewise constant decay (standard MLPerf ResNet schedule)
+lr_decay_epochs: [30, 60, 80]          # Epochs at which LR drops by 10x
+lr_decay_factor: 0.1
+
+# Convergence
+target_top1: 75.9                      # Minimum top-1 accuracy (%)
+target_top5: 93.0                      # Informational top-5 target (%)
+
+# Data augmentation
+crop_size: 224                         # Random crop size for training
+resize_size: 256                       # Resize shorter side to this before cropping
+
+# Evaluation
+eval_interval_epochs: 1                # Validate every N epochs
+
+# W&B (disabled by default — submission files are source of truth)
+wandb_enabled: false
+wandb_project: mlperf-resnet
+wandb_entity: ""                       # Set to your W&B entity
+
+# Output
+results_dir: results/mlperf_resnet
+system_id: linux_a100_4gpu
