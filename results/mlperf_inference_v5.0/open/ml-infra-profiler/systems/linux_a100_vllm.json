@@ -1,0 +1,13 @@
+{
+  "system_name": "linux_a100_vllm",
+  "division": "open",
+  "submitter": "ml-infra-profiler",
+  "hw_vendor": "NVIDIA",
+  "hw_model": "A100 80GB",
+  "hw_memory_gb": 80,
+  "hw_count": 2,
+  "sw_framework": "vLLM",
+  "sw_framework_version": "0.6.3",
+  "sw_os": "Linux",
+  "notes": "vLLM inference engine; tensor_parallel_size=2; bfloat16; Open Division; Offline + Server scenarios"
+}

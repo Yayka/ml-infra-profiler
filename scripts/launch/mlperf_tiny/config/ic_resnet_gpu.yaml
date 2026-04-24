@@ -1,0 +1,9 @@
+benchmark: ic
+model_path: data/mlperf_tiny/models/resnet_v1_int8.tflite
+data_path: data/mlperf_tiny/ic/cifar10_test.npz
+delegate: gpu            # TFLite GPU delegate; set to cpu for local dev
+num_threads: 1
+performance_samples: 1024   # Single Stream latency phase
+accuracy_target: 85.0       # CIFAR-10 top-1 %, Open Division
+scenario: single_stream
+system_id: linux_a100_tflite
