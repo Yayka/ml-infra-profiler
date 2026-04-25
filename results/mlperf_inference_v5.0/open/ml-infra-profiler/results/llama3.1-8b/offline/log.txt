@@ -1,0 +1,5 @@
+================================================
+MLPerf Inference v5.0 — Offline scenario log stub
+================================================
+Run 'make run-mlperf-inference' to populate with real results.
+================================================

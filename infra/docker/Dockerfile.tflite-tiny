@@ -1,0 +1,19 @@
+FROM python:3.11-slim-bookworm
+
+WORKDIR /workspace
+
+COPY environments/requirements-mlperf-tiny.txt .
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-mlperf-tiny.txt
+
+# Copy benchmark scripts
+COPY scripts/launch/mlperf_tiny/ scripts/launch/mlperf_tiny/
+COPY scripts/data/prepare_mlperf_tiny_data.sh scripts/data/
+
+# Data and results are mounted at runtime:
+#   -v $(pwd)/data:/workspace/data
+#   -v $(pwd)/results:/workspace/results
+#   -v $(pwd)/logs:/workspace/logs
+
+ENTRYPOINT ["python", "scripts/launch/mlperf_tiny/benchmark_runner.py"]

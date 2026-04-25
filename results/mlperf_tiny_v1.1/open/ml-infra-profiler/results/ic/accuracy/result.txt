@@ -1,0 +1,14 @@
+================================================
+MLPerf Results Summary
+================================================
+SUT name : TFLite
+Scenario : Single Stream
+Mode     : Accuracy
+Accuracy : 0.00%
+Result is : INVALID
+================================================
+Additional Stats
+================================================
+Correct predictions : 0
+Total samples       : 0
+Accuracy target     : 85.0%

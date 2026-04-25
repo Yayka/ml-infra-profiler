@@ -1,5 +1,8 @@
 .PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux launch-job launch-agent \
-        prepare-mlperf-data pull-nemo run-mlperf verify-mlperf
+        prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
+        setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
+        build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference \
+        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -79,6 +82,68 @@ run-mlperf:
 # Reads final val_loss from W&B. Override run with: WANDB_RUN_PATH=entity/project/run_id
 verify-mlperf:
 	bash scripts/launch/mlperf/verify_run.sh
+
+# --- MLPerf Tiny v1.1 IC benchmark (TFLite, Single Stream) ---
+
+# Create .venv-tiny with TFLite + deps (separate from main .venv — TF 2.14 conflicts with torch)
+setup-mlperf-tiny:
+	python3 -m venv .venv-tiny
+	.venv-tiny/bin/pip install --upgrade pip
+	.venv-tiny/bin/pip install -r environments/requirements-mlperf-tiny.txt
+
+# Download CIFAR-10 test set + ResNet TFLite model (~170 MB)
+prepare-mlperf-tiny-data:
+	bash scripts/data/prepare_mlperf_tiny_data.sh
+
+# Run IC benchmark with TFLite GPU delegate on A100
+run-mlperf-tiny:
+	bash scripts/launch/mlperf_tiny/run_mlperf_tiny.sh
+
+# Run IC benchmark on CPU (local dev / no GPU)
+run-mlperf-tiny-cpu:
+	DELEGATE=cpu bash scripts/launch/mlperf_tiny/run_mlperf_tiny.sh
+
+# Check IC accuracy >= 85% from submission result.txt
+verify-mlperf-tiny:
+	bash scripts/launch/mlperf_tiny/verify_tiny_run.sh
+
+# --- MLPerf Inference v5.0 Llama3.1-8B benchmark (Datacenter, vLLM) ---
+
+# Build Docker image with vLLM + LoadGen + MLCommons reference scripts
+build-mlperf-inference:
+	docker build -f infra/docker/Dockerfile.mlperf-inference \
+		-t ml-netprof/mlperf-inference:latest .
+
+# Download CNN/DM eval dataset + Llama3.1-8B-Instruct model (~15 GB). Requires HF_TOKEN in .env.
+prepare-mlperf-inference-data:
+	MODEL_DOWNLOAD_PATH=hf bash scripts/data/prepare_mlperf_inference_data.sh
+
+# Run Offline + Server benchmark (vLLM, 2x A100, ~40 min total)
+run-mlperf-inference:
+	bash scripts/launch/mlperf_inference/run_mlperf_inference.sh
+
+# Run Offline scenario only
+run-mlperf-inference-offline:
+	SCENARIO=offline bash scripts/launch/mlperf_inference/run_mlperf_inference.sh
+
+# Check ROUGE scores meet 99% of reference targets (ROUGE-1 >= 38.78, ROUGE-2 >= 15.91, ROUGE-L >= 24.50)
+verify-mlperf-inference:
+	bash scripts/launch/mlperf_inference/verify_inference_run.sh
+
+# --- MLPerf Inference v5.0 Llama2-70B benchmark (Datacenter, vLLM, TP=2) ---
+
+# Build Docker image with vLLM + LoadGen + MLCommons reference scripts (llama2-70b workdir)
+build-mlperf-llama2:
+	docker build -f infra/docker/Dockerfile.mlperf-llama2 \
+		-t ml-netprof/mlperf-llama2:latest .
+
+# Download OpenOrca dataset + Llama-2-70b-chat-hf model (~140 GB). Requires HF_TOKEN in .env.
+prepare-mlperf-llama2-data:
+	bash scripts/data/prepare_mlperf_llama2_data.sh
+
+# Run Server performance benchmark (vLLM, 2x A100)
+run-mlperf-llama2:
+	bash scripts/launch/mlperf_llama2/run_mlperf_llama2.sh
 
 # --- ml-netprof monitoring agent ---
 

@@ -1,6 +1,9 @@
 .env
 wandb/
 /data/
+results/*
+!results/mlperf_tiny_v1.1/
+!results/mlperf_inference_v5.0/
 .venv/
 __pycache__/
 .claude/worktrees/
