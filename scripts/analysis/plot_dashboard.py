@@ -24,15 +24,22 @@ UNIT_MULTIPLIERS = {
     "kB": 1e3,
     "MB": 1e6,
     "GB": 1e9,
+    "TB": 1e12,
+}
+
+PACKET_MULTIPLIERS = {
+    "kp/s": 1e3,
+    "Mp/s": 1e6,
+    "p/s": 1,
 }
 
 
 def parse_value(s: str) -> float:
-    """Parse a Grafana value string like '1.02 kB/s' or '5.02 p/s' to a float."""
+    """Parse a Grafana value string like '1.02 kB/s', '5.02 p/s', or '1.07 kp/s' to a float."""
     s = s.strip()
-    # packets: no unit conversion needed
-    if s.endswith("p/s"):
-        return float(s[:-3].strip())
+    for suffix, mult in PACKET_MULTIPLIERS.items():
+        if s.endswith(suffix):
+            return float(s[: -len(suffix)].strip()) * mult
     for suffix, mult in UNIT_MULTIPLIERS.items():
         if s.endswith(f" {suffix}/s") or s == f"{suffix}/s":
             return float(s[: -len(suffix) - 2].strip()) * mult
@@ -59,7 +66,9 @@ def clean_label(raw: str) -> str:
 
 def bytes_formatter(ax_max):
     """Return a FuncFormatter that auto-scales bytes to the best prefix."""
-    if ax_max >= 1e9:
+    if ax_max >= 1e12:
+        scale, unit = 1e12, "TB/s"
+    elif ax_max >= 1e9:
         scale, unit = 1e9, "GB/s"
     elif ax_max >= 1e6:
         scale, unit = 1e6, "MB/s"
@@ -167,6 +176,105 @@ DATASETS = [
     (RESULTS / "distributed inference", "Distributed Inference — Network & PCIe Dashboard"),
 ]
 
+import numpy as np
+
+
+def load_and_aggregate(folder: Path, pattern: str) -> tuple[np.ndarray, np.ndarray]:
+    """Return (elapsed_minutes, summed_values) arrays for all series in a CSV."""
+    csv_path = find_csv(folder, pattern)
+    df = pd.read_csv(csv_path, parse_dates=["Time"])
+    series_cols = [c for c in df.columns if c != "Time"]
+    for col in series_cols:
+        df[col] = df[col].apply(parse_value)
+    elapsed = (df["Time"] - df["Time"].iloc[0]).dt.total_seconds() / 60
+    total = df[series_cols].sum(axis=1)
+    return elapsed.values, total.values
+
+
+def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> None:
+    INF_COLOR = "#1f77b4"   # blue  — Distributed Inference
+    TRAIN_COLOR = "#d62728"  # red   — Training
+    THRESH_COLOR = "#888888"
+
+    # Panels: (pattern, title, unit_type, add_threshold, log_scale)
+    # Network Interface Stats uses log scale: both workloads export cumulative byte counters
+    # from Prometheus, so inference (6-min run, ~88 MB total) and training (145-min run,
+    # ~6.5 TB total) span orders of magnitude — log scale shows both clearly.
+    panels = [
+        ("Ethernet*Bytes*", "Ethernet — Bytes/s", "bytes", True, False),
+        ("Ethernet*Packets*", "Ethernet — Packets/s", "packets", True, False),
+        ("network interface*", "Network Interface Stats", "bytes", True, True),
+        ("PCIe*", "PCIe Stats", "bytes", True, False),
+    ]
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 7))
+    fig.patch.set_facecolor("white")
+
+    for ax, (pattern, panel_title, unit_type, add_threshold, log_scale) in zip(axes.flat, panels):
+        t_inf, v_inf = load_and_aggregate(inf_folder, pattern)
+        t_train, v_train = load_and_aggregate(train_folder, pattern)
+
+        ax.set_facecolor("white")
+        if log_scale:
+            ax.set_yscale("log")
+        ax.plot(t_inf, v_inf, color=INF_COLOR, linewidth=1.6, label="Distributed Inference")
+        ax.plot(t_train, v_train, color=TRAIN_COLOR, linewidth=1.6, label="Training")
+
+        if add_threshold:
+            med_inf = float(np.median(v_inf[v_inf > 0])) if (v_inf > 0).any() else 0
+            med_train = float(np.median(v_train[v_train > 0])) if (v_train > 0).any() else 0
+            if med_inf > 0 and med_train > 0:
+                thresh = float(np.sqrt(med_inf * med_train))
+                ax.axhline(thresh, color=THRESH_COLOR, linewidth=1.2, linestyle="--", zorder=0)
+                x_text = 0.02 * max(t_inf[-1], t_train[-1])
+                ax.text(
+                    x_text, thresh,
+                    "training threshold",
+                    color=THRESH_COLOR, fontsize=8, va="bottom", ha="left",
+                )
+
+        ax.set_title(panel_title, fontsize=11, fontweight="bold", color="#333333", pad=6)
+        ax.set_xlabel("Elapsed time (min)", fontsize=8, color="#333333")
+        ax.tick_params(axis="x", labelsize=8, colors="#333333")
+        ax.tick_params(axis="y", labelsize=8, colors="#333333")
+
+        if not log_scale:
+            all_vals = np.concatenate([v_inf, v_train])
+            y_max = float(all_vals.max()) if len(all_vals) else 1.0
+            if unit_type == "bytes":
+                ax.yaxis.set_major_formatter(ticker.FuncFormatter(bytes_formatter(y_max)))
+            else:
+                ax.yaxis.set_major_formatter(ticker.FuncFormatter(packets_formatter))
+        else:
+            # log-scale: use bytes_formatter keyed to the axis max after rendering
+            ax.yaxis.set_major_formatter(ticker.FuncFormatter(
+                lambda val, _pos: bytes_formatter(val)(val, _pos)
+            ))
+
+        ax.legend(loc="upper left", fontsize=8, framealpha=0.7, edgecolor="#cccccc")
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.spines[["left", "bottom"]].set_color("#cccccc")
+        ax.grid(True, color="#eeeeee", linewidth=0.8, which="both" if log_scale else "major")
+
+    fig.suptitle(
+        "Distributed Inference vs Training — Network & PCIe",
+        fontsize=14,
+        fontweight="bold",
+        color="#333333",
+        y=1.01,
+    )
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    print(f"Saved: {output_path}")
+
+
 if __name__ == "__main__":
     for folder, title in DATASETS:
         plot_dataset(folder, title)
+
+    plot_comparison(
+        RESULTS / "distributed inference",
+        RESULTS / "training",
+        RESULTS / "comparison.png",
+    )
