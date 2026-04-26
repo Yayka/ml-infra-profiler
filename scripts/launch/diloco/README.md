@@ -22,7 +22,7 @@ A `Dockerfile.diloco` is provided at `infra/docker/Dockerfile.diloco`. Build it 
 docker build -f infra/docker/Dockerfile.diloco -t ml-netprof/diloco:latest .
 ```
 
-The image is based on `pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel` and includes `transformers`, `datasets`, and `accelerate`. The training script is baked in at `/workspace/train_llama8b.py` and the image `ENTRYPOINT` is `torchrun`, so pass torchrun flags directly to `docker run`.
+The image is based on `pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel` and includes `transformers` and `datasets`. The training script is baked in at `/workspace/train_llama8b.py` and the image `ENTRYPOINT` is `torchrun`, so pass torchrun flags directly to `docker run`.
 
 **Multi-node example** (run on each node, adjust `--node-rank` and `MASTER_ADDR`):
 

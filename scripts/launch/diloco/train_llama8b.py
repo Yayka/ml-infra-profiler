@@ -11,6 +11,7 @@ FSDP FULL_SHARD (fits 8B on 80GB A100) and pure PyTorch for DiLoCo
 """
 
 import datetime
+import math
 import os
 import time
 from contextlib import nullcontext
@@ -163,7 +164,7 @@ def get_model(args) -> LlamaForCausalLM:
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
-def get_dataloader(args, tokenizer, world_size, rank, local_rank):
+def get_dataloader(args, tokenizer, world_size, rank):
     if args.fake_data:
         vocab_size = tokenizer.vocab_size if tokenizer else 1024
         dataset = FakeTokenizedDataset(args.seq_length, vocab_size)
@@ -359,7 +360,7 @@ def train(args):
         tokenizer = None
 
     # ---- Dataloader --------------------------------------------------------
-    dataloader = get_dataloader(args, tokenizer, world_size, rank, local_rank)
+    dataloader = get_dataloader(args, tokenizer, world_size, rank)
 
     # ---- Model -------------------------------------------------------------
     model = get_model(args)
@@ -474,27 +475,28 @@ def train(args):
                 )
 
         # --- Logging ---
-        if rank == 0 and real_step % args.log_every_n_steps == 0:
-            elapsed = time.time() - step_time
-            tokens_per_sec = (
-                args.seq_length
-                * args.total_batch_size
-                * args.log_every_n_steps
-                / elapsed
-            )
-            lr_now = scheduler.get_last_lr()[0]
-            ppl = torch.exp(loss_batch).item()
+        if real_step % args.log_every_n_steps == 0:
+            if rank == 0:
+                elapsed = time.time() - step_time
+                tokens_per_sec = (
+                    args.seq_length
+                    * args.total_batch_size
+                    * args.log_every_n_steps
+                    / elapsed
+                )
+                lr_now = scheduler.get_last_lr()[0]
+                avg_loss = loss_batch.item() / args.log_every_n_steps
+                ppl = math.exp(avg_loss)
 
-            print(
-                f"step {real_step:>6d} | loss {loss_batch.item():.4f} | "
-                f"ppl {ppl:.2f} | lr {lr_now:.2e} | "
-                f"tok/s {tokens_per_sec:.0f} | "
-                f"elapsed {elapsed:.1f}s"
-            )
+                print(
+                    f"step {real_step:>6d} | loss {avg_loss:.4f} | "
+                    f"ppl {ppl:.2f} | lr {lr_now:.2e} | "
+                    f"tok/s {tokens_per_sec:.0f} | "
+                    f"elapsed {elapsed:.1f}s"
+                )
 
-            step_time = time.time()
-
-        loss_batch = 0.0
+                step_time = time.time()
+            loss_batch = 0.0
 
         if args.max_steps is not None and real_step >= args.max_steps:
             break
