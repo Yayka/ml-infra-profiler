@@ -80,6 +80,15 @@ def parse_args():
     )
     p.add_argument("--seq-length", type=int, default=2048)
     p.add_argument("--attn-implementation", type=str, default="sdpa")
+    p.add_argument(
+        "--model-size",
+        type=str,
+        default="8b",
+        choices=["8b", "150m"],
+        help="Random-init model size when --path-model is not set. "
+        "'8b' is the production Llama-3.1-8B config; '150m' is a small "
+        "Llama for fast smoke tests (same tokenizer vocab).",
+    )
 
     # Data
     p.add_argument("--dataset-name-or-path", type=str, default="allenai/c4")
@@ -145,6 +154,28 @@ LLAMA_31_8B_CONFIG = dict(
     use_cache=False,
 )
 
+# Small Llama-style config for fast smoke tests where you actually want
+# to see loss decrease in a few minutes of wall-clock time. Vocab matches
+# the Llama-3.1 tokenizer so the same --tokenizer flag works for both.
+# ~150M params, trains visibly in tens of steps on a single node.
+LLAMA_150M_CONFIG = dict(
+    hidden_size=768,
+    intermediate_size=2048,
+    num_hidden_layers=12,
+    num_attention_heads=12,
+    num_key_value_heads=4,
+    vocab_size=128256,
+    max_position_embeddings=2048,
+    rms_norm_eps=1e-5,
+    rope_theta=500000.0,
+    use_cache=False,
+)
+
+MODEL_CONFIGS = {
+    "8b": LLAMA_31_8B_CONFIG,
+    "150m": LLAMA_150M_CONFIG,
+}
+
 
 def get_model(args) -> LlamaForCausalLM:
     if args.path_model is not None:
@@ -154,7 +185,7 @@ def get_model(args) -> LlamaForCausalLM:
         return LlamaForCausalLM.from_pretrained(args.path_model, config=config)
 
     config = LlamaConfig(
-        **LLAMA_31_8B_CONFIG,
+        **MODEL_CONFIGS[args.model_size],
         attn_implementation=args.attn_implementation,
     )
     return LlamaForCausalLM(config)
