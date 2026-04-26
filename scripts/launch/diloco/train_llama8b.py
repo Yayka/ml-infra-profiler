@@ -34,7 +34,6 @@ from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from torch.utils.data import DataLoader, IterableDataset
 from transformers import (
     AutoTokenizer,
-    DataCollatorForLanguageModeling,
     LlamaConfig,
     LlamaForCausalLM,
     get_cosine_schedule_with_warmup,
@@ -194,7 +193,26 @@ def get_dataloader(args, tokenizer, world_size, rank):
                 "labels": torch.stack([b["labels"] for b in batch]),
             }
     else:
-        collate_fn = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+        # Mask labels via attention_mask, not via pad_token_id. Llama tokenizers
+        # have no pad token, so we set pad_token = eos_token below for the
+        # tokenizer's padding step. If we used DataCollatorForLanguageModeling
+        # it would mask every position where input_ids == pad_token_id, which
+        # also silently masks real EOS tokens from the loss. Using
+        # attention_mask masks only the actual padded positions.
+        def collate_fn(batch):
+            input_ids = torch.tensor(
+                [b["input_ids"] for b in batch], dtype=torch.long
+            )
+            attention_mask = torch.tensor(
+                [b["attention_mask"] for b in batch], dtype=torch.long
+            )
+            labels = input_ids.clone()
+            labels[attention_mask == 0] = -100
+            return {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "labels": labels,
+            }
 
     return DataLoader(
         dataset,
@@ -354,10 +372,21 @@ def train(args):
     if tokenizer_name:
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True)
         if tokenizer.pad_token is None:
+            # Required for tokenizer-side padding to work; the custom collator
+            # below masks loss via attention_mask, not pad_token_id, so this
+            # does NOT cause real EOS tokens to be masked from the loss.
             tokenizer.pad_token = tokenizer.eos_token
-    else:
-        # Fallback for random-init without tokenizer (requires --fake-data)
+    elif args.fake_data:
+        # Random-init smoke tests don't need a real tokenizer.
         tokenizer = None
+    else:
+        raise ValueError(
+            "Real-data training requires a tokenizer. Pass --tokenizer (or "
+            "--path-model). Use --fake-data for a tokenizer-free smoke test. "
+            "Example: --tokenizer NousResearch/Meta-Llama-3.1-8B "
+            "(meta-llama/Llama-3.1-8B is gated and needs HF_TOKEN in the "
+            "container environment)."
+        )
 
     # ---- Dataloader --------------------------------------------------------
     dataloader = get_dataloader(args, tokenizer, world_size, rank)

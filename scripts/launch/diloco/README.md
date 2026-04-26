@@ -87,6 +87,14 @@ Add `--diloco --diloco-local-steps 5` to both commands for a DiLoCo smoke test.
 
 For actual interconnect profiling with the full 8B model and C4 dataset.
 
+A real tokenizer is required (the script will fail fast if you forget). The
+official `meta-llama/Llama-3.1-8B` repo on HF Hub is gated, so either:
+
+- accept the Llama license and pass `-e HF_TOKEN=$HF_TOKEN` to `docker run`
+  with `--tokenizer meta-llama/Llama-3.1-8B`, or
+- use the open mirror `--tokenizer NousResearch/Meta-Llama-3.1-8B` (same
+  vocab, no auth required) — this is what the examples below use.
+
 ### Baseline (FSDP across all GPUs)
 
 ```bash
@@ -94,6 +102,7 @@ For actual interconnect profiling with the full 8B model and C4 dataset.
 torchrun --nnodes=2 --nproc_per_node=2 --node-rank=$RANK \
     --master-addr=$MASTER_ADDR --master-port=29500 \
     train_llama8b.py \
+    --tokenizer NousResearch/Meta-Llama-3.1-8B \
     --total-batch-size 512 --per-device-train-batch-size 1 \
     --seq-length 2048 --lr 4e-4 --warmup-steps 1000 \
     --max-steps 500
@@ -106,6 +115,7 @@ torchrun --nnodes=2 --nproc_per_node=2 --node-rank=$RANK \
 torchrun --nnodes=2 --nproc_per_node=2 --node-rank=$RANK \
     --master-addr=$MASTER_ADDR --master-port=29500 \
     train_llama8b.py \
+    --tokenizer NousResearch/Meta-Llama-3.1-8B \
     --total-batch-size 512 --per-device-train-batch-size 1 \
     --seq-length 2048 --lr 4e-4 --warmup-steps 1000 \
     --max-steps 500 \
