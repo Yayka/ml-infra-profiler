@@ -154,10 +154,7 @@ LLAMA_31_8B_CONFIG = dict(
     use_cache=False,
 )
 
-# Small Llama-style config for fast smoke tests where you actually want
-# to see loss decrease in a few minutes of wall-clock time. Vocab matches
-# the Llama-3.1 tokenizer so the same --tokenizer flag works for both.
-# ~150M params, trains visibly in tens of steps on a single node.
+# Small config for fast smoke tests
 LLAMA_150M_CONFIG = dict(
     hidden_size=768,
     intermediate_size=2048,

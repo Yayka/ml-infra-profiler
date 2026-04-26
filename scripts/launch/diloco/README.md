@@ -87,14 +87,6 @@ Add `--diloco --diloco-local-steps 5` to both commands for a DiLoCo smoke test.
 
 For actual interconnect profiling with the full 8B model and C4 dataset.
 
-A real tokenizer is required (the script will fail fast if you forget). The
-official `meta-llama/Llama-3.1-8B` repo on HF Hub is gated, so either:
-
-- accept the Llama license and pass `-e HF_TOKEN=$HF_TOKEN` to `docker run`
-  with `--tokenizer meta-llama/Llama-3.1-8B`, or
-- use the open mirror `--tokenizer NousResearch/Meta-Llama-3.1-8B` (same
-  vocab, no auth required) — this is what the examples below use.
-
 ### Baseline (FSDP across all GPUs)
 
 ```bash
@@ -121,6 +113,8 @@ torchrun --nnodes=2 --nproc_per_node=2 --node-rank=$RANK \
     --max-steps 500 \
     --diloco --diloco-local-steps 500 --diloco-outer-lr 0.7
 ```
+
+Note: we use NousResearch's Llama-3.1-8B tokenizer because the official Llama-3.1-8B repo requires license. If you have a license, you can use `--tokenizer meta-llama/Llama-3.1-8B` with HuggingFace token provided as env var `-e HF_TOKEN=$HF_TOKEN`.
 
 ## How It Works
 
