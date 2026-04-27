@@ -9,6 +9,7 @@ Outputs:
     results/distributed inference/dashboard.png
 """
 
+import math
 import numpy as np
 import fnmatch
 import re
@@ -94,8 +95,20 @@ def bytes_formatter(ax_max):
     return fmt
 
 
+def _fmt_num(val: float) -> str:
+    """Format a scaled numeric value: round to nearest whole if <10, else ceil to nearest 10."""
+    if val < 10:
+        return str(round(val))
+    else:
+        return str(math.ceil(val / 10) * 10)
+
+
 def packets_formatter(val, _pos):
-    return f"{val:.1f} p/s"
+    if val >= 1e6:
+        return f"{val/1e6:.1f}M p/s"
+    elif val >= 1e3:
+        return f"{val/1e3:.1f}k p/s"
+    return f"{int(val)} p/s"
 
 
 # Map filename-pattern keywords to panel metadata
@@ -249,14 +262,14 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> 
     # "network interface usage total" exports cumulative byte counters, so differentiate=True
     # converts them to instantaneous rates before plotting.
     panels = [
-        ("Ethernet*Bytes*",    "Ethernet — Bytes/s",
+        ("Ethernet*Bytes*",    "Internode Bytes Sent",
          "bytes",   True,  False, False, False, "GB/s"),
-        ("Ethernet*Packets*",  "Ethernet — Packets/s",
+        ("Ethernet*Packets*",  "Internode Packets Sent",
          "packets", True,  False, False, False, None),
-        ("network interface*", "Network Interface Usage Cumulative Total",
-         "bytes",   False, True,  False, True,  "GB"),
-        ("PCIe*",              "PCIe Stats",
+        ("PCIe*",              "Intranode Bytes Sent",
          "bytes",   True,  False, False, False, None),
+        ("network interface*", "Internode Cumulative Bytes Sent",
+         "bytes",   True,  True,  False, True,  "GB"),
     ]
 
     # Clip both runs to the shorter duration so x-axes align.
@@ -276,24 +289,37 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> 
 
         ax.set_facecolor("white")
         ax.plot(t_inf, v_inf, color=INF_COLOR,
-                linewidth=1.6, label="Distributed Inference")
+                linewidth=1.6, label="Inference")
         ax.plot(t_train, v_train, color=TRAIN_COLOR,
                 linewidth=1.6, label="Training")
 
         if add_threshold:
-            med_inf = float(np.median(v_inf[v_inf > 0])) if (
-                v_inf > 0).any() else 0
             med_train = float(np.median(v_train[v_train > 0])) if (
                 v_train > 0).any() else 0
-            if med_inf > 0 and med_train > 0:
-                thresh = float(np.sqrt(med_inf * med_train))
+            if med_train > 0:
+                thresh = med_train / 100
+                if unit_type == "packets":
+                    if thresh >= 1e6:
+                        thresh_str = f"{_fmt_num(thresh/1e6)}M p/s"
+                    elif thresh >= 1e3:
+                        thresh_str = f"{_fmt_num(thresh/1e3)}k p/s"
+                    else:
+                        thresh_str = f"{_fmt_num(thresh)} p/s"
+                elif thresh >= 1e9:
+                    thresh_str = f"{_fmt_num(thresh/1e9)} GB/s"
+                elif thresh >= 1e6:
+                    thresh_str = f"{_fmt_num(thresh/1e6)} MB/s"
+                elif thresh >= 1e3:
+                    thresh_str = f"{_fmt_num(thresh/1e3)} kB/s"
+                else:
+                    thresh_str = f"{_fmt_num(thresh)} B/s"
                 ax.axhline(thresh, color=THRESH_COLOR,
                            linewidth=1.2, linestyle="--", zorder=0)
-                x_text = 0.02 * max_t
                 ax.text(
-                    x_text, thresh,
-                    "training threshold",
-                    color=THRESH_COLOR, fontsize=8, va="bottom", ha="left",
+                    1.0, thresh,
+                    f"bandwidth limit ({thresh_str})",
+                    color=THRESH_COLOR, fontsize=8, va="bottom", ha="right",
+                    transform=ax.get_yaxis_transform(),
                 )
 
         ax.set_title(panel_title, fontsize=11,
@@ -327,12 +353,71 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> 
         ax.grid(True, color="#eeeeee", linewidth=0.8)
 
     fig.suptitle(
-        "Distributed Inference vs Training — Network & PCIe",
+        "Distributed Inference vs Training Communication — Single Node View",
         fontsize=14,
         fontweight="bold",
         color="#333333",
         y=1.01,
     )
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    print(f"Saved: {output_path}")
+
+
+def plot_internode_bytes(inf_folder: Path, train_folder: Path, output_path: Path) -> None:
+    INF_COLOR = "#1f77b4"
+    TRAIN_COLOR = "#d62728"
+    THRESH_COLOR = "#888888"
+
+    pattern, panel_title, unit_type, add_threshold, log_scale, diff, use_sum, force_unit = (
+        "Ethernet*Bytes*", "Internode Bytes Sent", "bytes", True, False, False, False, "GB/s"
+    )
+
+    t_inf_end = load_and_aggregate(inf_folder, pattern)[0][-1]
+    t_train_end = load_and_aggregate(train_folder, pattern)[0][-1]
+    max_t = min(t_inf_end, t_train_end)
+
+    t_inf, v_inf = load_and_aggregate(inf_folder, pattern, max_minutes=max_t)
+    t_train, v_train = load_and_aggregate(train_folder, pattern, max_minutes=max_t)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    ax.plot(t_inf, v_inf, color=INF_COLOR, linewidth=1.6, label="Inference")
+    ax.plot(t_train, v_train, color=TRAIN_COLOR, linewidth=1.6, label="Training")
+
+    if add_threshold:
+        med_train = float(np.median(v_train[v_train > 0])) if (v_train > 0).any() else 0
+        if med_train > 0:
+            thresh = med_train / 100
+            if thresh >= 1e9:
+                thresh_str = f"{_fmt_num(thresh/1e9)} GB/s"
+            elif thresh >= 1e6:
+                thresh_str = f"{_fmt_num(thresh/1e6)} MB/s"
+            elif thresh >= 1e3:
+                thresh_str = f"{_fmt_num(thresh/1e3)} kB/s"
+            else:
+                thresh_str = f"{_fmt_num(thresh)} B/s"
+            ax.axhline(thresh, color=THRESH_COLOR, linewidth=1.2, linestyle="--", zorder=0)
+            ax.text(
+                1.0, thresh,
+                f"bandwidth limit ({thresh_str})",
+                color=THRESH_COLOR, fontsize=8, va="bottom", ha="right",
+                transform=ax.get_yaxis_transform(),
+            )
+
+    ax.set_title(panel_title, fontsize=12, fontweight="bold", color="#333333", pad=8)
+    ax.set_xlabel("Elapsed time (min)", fontsize=9, color="#333333")
+    ax.tick_params(axis="x", labelsize=8, colors="#333333")
+    ax.tick_params(axis="y", labelsize=8, colors="#333333")
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: f"{v/1e9:.2f} GB/s"))
+    ax.legend(loc="upper left", fontsize=9, framealpha=0.7, edgecolor="#cccccc")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.spines[["left", "bottom"]].set_color("#cccccc")
+    ax.grid(True, color="#eeeeee", linewidth=0.8)
+
     fig.tight_layout()
     fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -347,4 +432,10 @@ if __name__ == "__main__":
         RESULTS / "distributed inference",
         RESULTS / "training",
         RESULTS / "comparison.png",
+    )
+
+    plot_internode_bytes(
+        RESULTS / "distributed inference",
+        RESULTS / "training",
+        RESULTS / "internode_bytes.png",
     )
