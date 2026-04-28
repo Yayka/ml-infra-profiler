@@ -11,6 +11,7 @@ FSDP FULL_SHARD (fits 8B on 80GB A100) and pure PyTorch for DiLoCo
 """
 
 import datetime
+import math
 import os
 import time
 from contextlib import nullcontext
@@ -33,7 +34,6 @@ from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from torch.utils.data import DataLoader, IterableDataset
 from transformers import (
     AutoTokenizer,
-    DataCollatorForLanguageModeling,
     LlamaConfig,
     LlamaForCausalLM,
     get_cosine_schedule_with_warmup,
@@ -80,6 +80,15 @@ def parse_args():
     )
     p.add_argument("--seq-length", type=int, default=2048)
     p.add_argument("--attn-implementation", type=str, default="sdpa")
+    p.add_argument(
+        "--model-size",
+        type=str,
+        default="8b",
+        choices=["8b", "150m"],
+        help="Random-init model size when --path-model is not set. "
+        "'8b' is the production Llama-3.1-8B config; '150m' is a small "
+        "Llama for fast smoke tests (same tokenizer vocab).",
+    )
 
     # Data
     p.add_argument("--dataset-name-or-path", type=str, default="allenai/c4")
@@ -145,6 +154,25 @@ LLAMA_31_8B_CONFIG = dict(
     use_cache=False,
 )
 
+# Small config for fast smoke tests
+LLAMA_150M_CONFIG = dict(
+    hidden_size=768,
+    intermediate_size=2048,
+    num_hidden_layers=12,
+    num_attention_heads=12,
+    num_key_value_heads=4,
+    vocab_size=128256,
+    max_position_embeddings=2048,
+    rms_norm_eps=1e-5,
+    rope_theta=500000.0,
+    use_cache=False,
+)
+
+MODEL_CONFIGS = {
+    "8b": LLAMA_31_8B_CONFIG,
+    "150m": LLAMA_150M_CONFIG,
+}
+
 
 def get_model(args) -> LlamaForCausalLM:
     if args.path_model is not None:
@@ -154,7 +182,7 @@ def get_model(args) -> LlamaForCausalLM:
         return LlamaForCausalLM.from_pretrained(args.path_model, config=config)
 
     config = LlamaConfig(
-        **LLAMA_31_8B_CONFIG,
+        **MODEL_CONFIGS[args.model_size],
         attn_implementation=args.attn_implementation,
     )
     return LlamaForCausalLM(config)
@@ -163,7 +191,7 @@ def get_model(args) -> LlamaForCausalLM:
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
-def get_dataloader(args, tokenizer, world_size, rank, local_rank):
+def get_dataloader(args, tokenizer, world_size, rank):
     if args.fake_data:
         vocab_size = tokenizer.vocab_size if tokenizer else 1024
         dataset = FakeTokenizedDataset(args.seq_length, vocab_size)
@@ -193,7 +221,26 @@ def get_dataloader(args, tokenizer, world_size, rank, local_rank):
                 "labels": torch.stack([b["labels"] for b in batch]),
             }
     else:
-        collate_fn = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+        # Mask labels via attention_mask, not via pad_token_id. Llama tokenizers
+        # have no pad token, so we set pad_token = eos_token below for the
+        # tokenizer's padding step. If we used DataCollatorForLanguageModeling
+        # it would mask every position where input_ids == pad_token_id, which
+        # also silently masks real EOS tokens from the loss. Using
+        # attention_mask masks only the actual padded positions.
+        def collate_fn(batch):
+            input_ids = torch.tensor(
+                [b["input_ids"] for b in batch], dtype=torch.long
+            )
+            attention_mask = torch.tensor(
+                [b["attention_mask"] for b in batch], dtype=torch.long
+            )
+            labels = input_ids.clone()
+            labels[attention_mask == 0] = -100
+            return {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "labels": labels,
+            }
 
     return DataLoader(
         dataset,
@@ -353,13 +400,24 @@ def train(args):
     if tokenizer_name:
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True)
         if tokenizer.pad_token is None:
+            # Required for tokenizer-side padding to work; the custom collator
+            # below masks loss via attention_mask, not pad_token_id, so this
+            # does NOT cause real EOS tokens to be masked from the loss.
             tokenizer.pad_token = tokenizer.eos_token
-    else:
-        # Fallback for random-init without tokenizer (requires --fake-data)
+    elif args.fake_data:
+        # Random-init smoke tests don't need a real tokenizer.
         tokenizer = None
+    else:
+        raise ValueError(
+            "Real-data training requires a tokenizer. Pass --tokenizer (or "
+            "--path-model). Use --fake-data for a tokenizer-free smoke test. "
+            "Example: --tokenizer NousResearch/Meta-Llama-3.1-8B "
+            "(meta-llama/Llama-3.1-8B is gated and needs HF_TOKEN in the "
+            "container environment)."
+        )
 
     # ---- Dataloader --------------------------------------------------------
-    dataloader = get_dataloader(args, tokenizer, world_size, rank, local_rank)
+    dataloader = get_dataloader(args, tokenizer, world_size, rank)
 
     # ---- Model -------------------------------------------------------------
     model = get_model(args)
@@ -474,27 +532,28 @@ def train(args):
                 )
 
         # --- Logging ---
-        if rank == 0 and real_step % args.log_every_n_steps == 0:
-            elapsed = time.time() - step_time
-            tokens_per_sec = (
-                args.seq_length
-                * args.total_batch_size
-                * args.log_every_n_steps
-                / elapsed
-            )
-            lr_now = scheduler.get_last_lr()[0]
-            ppl = torch.exp(loss_batch).item()
+        if real_step % args.log_every_n_steps == 0:
+            if rank == 0:
+                elapsed = time.time() - step_time
+                tokens_per_sec = (
+                    args.seq_length
+                    * args.total_batch_size
+                    * args.log_every_n_steps
+                    / elapsed
+                )
+                lr_now = scheduler.get_last_lr()[0]
+                avg_loss = loss_batch.item() / args.log_every_n_steps
+                ppl = math.exp(avg_loss)
 
-            print(
-                f"step {real_step:>6d} | loss {loss_batch.item():.4f} | "
-                f"ppl {ppl:.2f} | lr {lr_now:.2e} | "
-                f"tok/s {tokens_per_sec:.0f} | "
-                f"elapsed {elapsed:.1f}s"
-            )
+                print(
+                    f"step {real_step:>6d} | loss {avg_loss:.4f} | "
+                    f"ppl {ppl:.2f} | lr {lr_now:.2e} | "
+                    f"tok/s {tokens_per_sec:.0f} | "
+                    f"elapsed {elapsed:.1f}s"
+                )
 
-            step_time = time.time()
-
-        loss_batch = 0.0
+                step_time = time.time()
+            loss_batch = 0.0
 
         if args.max_steps is not None and real_step >= args.max_steps:
             break

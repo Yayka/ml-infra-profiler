@@ -22,7 +22,7 @@ A `Dockerfile.diloco` is provided at `infra/docker/Dockerfile.diloco`. Build it 
 docker build -f infra/docker/Dockerfile.diloco -t ml-netprof/diloco:latest .
 ```
 
-The image is based on `pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel` and includes `transformers`, `datasets`, and `accelerate`. The training script is baked in at `/workspace/train_llama8b.py` and the image `ENTRYPOINT` is `torchrun`, so pass torchrun flags directly to `docker run`.
+The image is based on `pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel` and includes `transformers` and `datasets`. The training script is baked in at `/workspace/train_llama8b.py` and the image `ENTRYPOINT` is `torchrun`, so pass torchrun flags directly to `docker run`.
 
 **Multi-node example** (run on each node, adjust `--node-rank` and `MASTER_ADDR`):
 
@@ -94,6 +94,7 @@ For actual interconnect profiling with the full 8B model and C4 dataset.
 torchrun --nnodes=2 --nproc_per_node=2 --node-rank=$RANK \
     --master-addr=$MASTER_ADDR --master-port=29500 \
     train_llama8b.py \
+    --tokenizer NousResearch/Meta-Llama-3.1-8B \
     --total-batch-size 512 --per-device-train-batch-size 1 \
     --seq-length 2048 --lr 4e-4 --warmup-steps 1000 \
     --max-steps 500
@@ -106,11 +107,14 @@ torchrun --nnodes=2 --nproc_per_node=2 --node-rank=$RANK \
 torchrun --nnodes=2 --nproc_per_node=2 --node-rank=$RANK \
     --master-addr=$MASTER_ADDR --master-port=29500 \
     train_llama8b.py \
+    --tokenizer NousResearch/Meta-Llama-3.1-8B \
     --total-batch-size 512 --per-device-train-batch-size 1 \
     --seq-length 2048 --lr 4e-4 --warmup-steps 1000 \
     --max-steps 500 \
     --diloco --diloco-local-steps 500 --diloco-outer-lr 0.7
 ```
+
+Note: we use NousResearch's Llama-3.1-8B tokenizer because the official Llama-3.1-8B repo requires license. If you have a license, you can use `--tokenizer meta-llama/Llama-3.1-8B` with HuggingFace token provided as env var `-e HF_TOKEN=$HF_TOKEN`.
 
 ## How It Works
 
