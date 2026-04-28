@@ -462,6 +462,8 @@ class SUTHTTPClientServer(SUTHTTPClient):
         with requests.post(
             f"{self.server_url}/v1/completions", json=payload, stream=True, timeout=300
         ) as resp:
+            if not resp.ok:
+                log.error(f"Server returned {resp.status_code}: {resp.text}")
             resp.raise_for_status()
             for line in resp.iter_lines():
                 if not line:
