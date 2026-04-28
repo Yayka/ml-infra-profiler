@@ -91,6 +91,21 @@ EOF
 DATASET_DIR="$(dirname "${DATASET_PATH}")"
 DATASET_FILE="$(basename "${DATASET_PATH}")"
 
+echo "  Dataset dir:     $DATASET_DIR"
+echo "  Dataset file:    $DATASET_FILE"
+
+if [[ ! -e "${DATASET_PATH}" ]]; then
+    echo "ERROR: dataset not found on this host: ${DATASET_PATH}" >&2
+    echo "  Make sure the dataset is accessible on Node B at the path in ${CONFIG}" >&2
+    exit 1
+fi
+if [[ ! -f "${DATASET_PATH}" ]]; then
+    echo "ERROR: dataset path exists but is not a regular file: ${DATASET_PATH}" >&2
+    echo "  ls output:" >&2
+    ls -la "${DATASET_DIR}/" >&2
+    exit 1
+fi
+
 echo "Starting LoadGen client run..."
 docker run --rm \
     --network=host \
