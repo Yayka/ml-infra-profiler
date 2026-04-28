@@ -392,7 +392,7 @@ class SUTHTTPClient:
                 token_ids = raw.squeeze(0).tolist()
                 payload = {
                     "model": self.api_model_name,
-                    "prompt_token_ids": token_ids,
+                    "prompt": token_ids,
                     "max_tokens": self.max_output_tokens,
                     "min_tokens": 2,
                     "temperature": 1,
