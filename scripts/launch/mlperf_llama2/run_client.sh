@@ -86,10 +86,15 @@ cat > "${LOG_DIR}/user.conf" <<EOF
 *.Server.max_query_count = 200
 EOF
 
+# Mount the directory containing the dataset file to avoid Docker creating the
+# bind-mount target as a directory (classic Docker quirk with file bind mounts).
+DATASET_DIR="$(dirname "${DATASET_PATH}")"
+DATASET_FILE="$(basename "${DATASET_PATH}")"
+
 echo "Starting LoadGen client run..."
 docker run --rm \
     --network=host \
-    -v "${DATASET_PATH}:/data/dataset/open_orca.pkl:ro" \
+    -v "${DATASET_DIR}:/data/dataset:ro" \
     -v "${MODEL_PATH}:/data/model:ro" \
     -v "$(pwd)/${LOG_DIR}:/output" \
     -v "$(pwd)/scripts/launch/mlperf_llama2/SUT_VLLM_patched.py:/mlperf_inference/language/llama2-70b/SUT_VLLM.py:ro" \
@@ -101,7 +106,7 @@ docker run --rm \
         --api-server "${SERVER_URL}" \
         --api-model-name "${MODEL_NAME}" \
         --model-path /data/model \
-        --dataset-path /data/dataset/open_orca.pkl \
+        --dataset-path "/data/dataset/${DATASET_FILE}" \
         --dtype "${DTYPE}" \
         --batch-size "${BATCH_SIZE}" \
         --total-sample-count "${TOTAL_SAMPLES}" \
