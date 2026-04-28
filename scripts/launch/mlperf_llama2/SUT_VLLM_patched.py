@@ -403,17 +403,18 @@ class SUTHTTPClient:
                 resp = requests.post(
                     f"{self.server_url}/v1/completions", json=payload, timeout=300
                 )
+                if not resp.ok:
+                    log.error(f"Server returned {resp.status_code}: {resp.text}")
                 resp.raise_for_status()
                 text = resp.json()["choices"][0]["text"]
                 output_token_ids = self.data_object.tokenizer.encode(text)
                 pred_output_tokens.append(output_token_ids)
 
-            processed_output = self.data_object.postProcess(
-                pred_output_tokens, query_id_list=query_ids
-            )
             for i in range(len(qitem)):
-                n_tokens = processed_output[i].shape[0]
-                response_array = array.array("B", processed_output[i].tobytes())
+                token_ids = pred_output_tokens[i]
+                output_array = np.array(token_ids, dtype=np.int32)
+                n_tokens = output_array.shape[0]
+                response_array = array.array("B", output_array.tobytes())
                 bi = response_array.buffer_info()
                 response = [lg.QuerySampleResponse(qitem[i].id, bi[0], bi[1], n_tokens)]
                 lg.QuerySamplesComplete(response)
@@ -487,11 +488,9 @@ class SUTHTTPClientServer(SUTHTTPClient):
                 full_text += delta_text
 
         output_token_ids = self.data_object.tokenizer.encode(full_text)
-        processed_output = self.data_object.postProcess(
-            [output_token_ids], query_id_list=[qitem.index]
-        )
-        n_tokens = processed_output[0].shape[0]
-        response_array = array.array("B", processed_output[0].tobytes())
+        output_array = np.array(output_token_ids, dtype=np.int32)
+        n_tokens = output_array.shape[0]
+        response_array = array.array("B", output_array.tobytes())
         bi = response_array.buffer_info()
         lg.QuerySamplesComplete([lg.QuerySampleResponse(qitem.id, bi[0], bi[1], n_tokens)])
 
