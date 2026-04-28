@@ -8,16 +8,21 @@ set -euo pipefail
 # Runs LoadGen + SUTHTTPClient(Server) in Docker on Node B. No GPUs needed —
 # the container only drives HTTP traffic and processes tokenization.
 #
-# Prerequisites:
-#   - Docker image built: make build-mlperf-llama2
-#   - Data downloaded: make prepare-mlperf-llama2-data
-#   - Node A serving: make run-mlperf-llama2
-#   - SERVER_URL env var set to Node A's URL
+# Node B does NOT need the full 140GB model weights — only the tokenizer
+# (~5 MB). Copy tokenizer files from Node A once:
 #
-# Usage:
+#   mkdir -p /data/llama2-tokenizer
+#   scp azureuser@<node-a-ip>:/data/mlperf_llama2/models/Llama-2-70b-chat-hf/tokenizer*.{model,json} \
+#       /data/llama2-tokenizer/
+#   scp azureuser@<node-a-ip>:/data/mlperf_llama2/models/Llama-2-70b-chat-hf/special_tokens_map.json \
+#       /data/llama2-tokenizer/
+#
+# Then run:
+#   TOKENIZER_PATH=/data/llama2-tokenizer \
 #   SERVER_URL=http://<node-a-ip>:8000 make run-mlperf-llama2-client
-#   # or directly:
-#   SERVER_URL=http://10.0.0.10:8000 bash scripts/launch/mlperf_llama2/run_client.sh
+#
+# If TOKENIZER_PATH is not set, falls back to MODEL_PATH from config
+# (requires the full model to be present on Node B).
 # ============================================================================
 
 # Load .env
@@ -62,13 +67,19 @@ TARGET_QPS=$(yaml_get "$CONFIG" target_qps)
 
 MODEL_NAME="${MODEL_NAME:-$(basename "$MODEL_PATH")}"
 
+# TOKENIZER_PATH: directory containing just the tokenizer files (~5 MB).
+# Node B does not need the full 140GB model weights — copy only the tokenizer
+# from Node A. If not set, falls back to MODEL_PATH (requires full model).
+TOKENIZER_PATH="${TOKENIZER_PATH:-${MODEL_PATH}}"
+[[ "$TOKENIZER_PATH" != /* ]] && TOKENIZER_PATH="$(pwd)/${TOKENIZER_PATH}"
+
 mkdir -p "$LOG_DIR"
 
 echo "=== MLPerf Llama2-70B — LoadGen Client ==="
 echo "  Image:           $IMAGE"
 echo "  Server URL:      $SERVER_URL"
 echo "  Model name:      $MODEL_NAME"
-echo "  Model path:      $MODEL_PATH"
+echo "  Tokenizer path:  $TOKENIZER_PATH"
 echo "  Dataset:         $DATASET_PATH"
 echo "  Dtype:           $DTYPE"
 echo "  Total samples:   $TOTAL_SAMPLES"
@@ -110,7 +121,7 @@ echo "Starting LoadGen client run..."
 docker run --rm \
     --network=host \
     -v "${DATASET_DIR}:/data/dataset:ro" \
-    -v "${MODEL_PATH}:/data/model:ro" \
+    -v "${TOKENIZER_PATH}:/data/tokenizer:ro" \
     -v "$(pwd)/${LOG_DIR}:/output" \
     -v "$(pwd)/scripts/launch/mlperf_llama2/SUT_VLLM_patched.py:/mlperf_inference/language/llama2-70b/SUT_VLLM.py:ro" \
     -v "$(pwd)/scripts/launch/mlperf_llama2/main_patched.py:/mlperf_inference/language/llama2-70b/main.py:ro" \
@@ -120,7 +131,7 @@ docker run --rm \
         --vllm \
         --api-server "${SERVER_URL}" \
         --api-model-name "${MODEL_NAME}" \
-        --model-path /data/model \
+        --model-path /data/tokenizer \
         --dataset-path "/data/dataset/${DATASET_FILE}" \
         --dtype "${DTYPE}" \
         --batch-size "${BATCH_SIZE}" \
