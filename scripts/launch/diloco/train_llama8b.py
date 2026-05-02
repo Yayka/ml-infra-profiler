@@ -10,7 +10,9 @@ FSDP FULL_SHARD (fits 8B on 80GB A100) and pure PyTorch for DiLoCo
 (no hivemind dependency).
 """
 
+import ctypes
 import datetime
+import gc
 import math
 import os
 import time
@@ -41,6 +43,19 @@ from transformers import (
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer
 
 TIMEOUT_NCCL_MINUTES = int(os.environ.get("TIMEOUT_NCCL_MINUTES", "120"))
+
+
+def _release_cpu_memory():
+    """Force Python to free unused objects and ask glibc to return memory to
+    the OS. Without malloc_trim, the freed pages stay in the per-process
+    arena, so back-to-back DiLoCo outer steps trip CPU OOM on nodes whose
+    RAM is already mostly committed by the persistent outer optimizer state.
+    """
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -294,39 +309,67 @@ def diloco_outer_step(
     Uses a gloo process group for the all-reduce since pseudo-gradients
     live on CPU (NCCL requires CUDA tensors).
     """
+    # Pull SGD hyperparameters from the existing optimizer so the chunked
+    # manual update below stays consistent with DiLoCoState's config.
+    pg = state.outer_optimizer.param_groups[0]
+    lr = pg["lr"]
+    momentum = pg["momentum"]
+    nesterov = pg["nesterov"]
+
     with FSDP.summon_full_params(
         model,
         offload_to_cpu=True,
         writeback=True,
     ):
-        # 1. Compute pseudo-gradients and all-reduce across all ranks.
-        #    Within a node, ranks have identical params (FSDP keeps them
-        #    in sync), so their pseudo-grads are the same.  The all-reduce
-        #    sums across world_size ranks; dividing by world_size gives
-        #    the correct cross-node average:
-        #    SUM / world_size = (local_ws * PG0 + local_ws * PG1) / (nnodes * local_ws)
-        #                     = (PG0 + PG1) / nnodes
+        # Process parameters one at a time to bound peak CPU memory.
+        # Holding every parameter's fp32 pseudo-gradient simultaneously
+        # (the natural shape for optimizer.step()) added ~32 GB per rank
+        # on top of the 96 GB persistent outer-optimizer state, which
+        # tipped the second outer step into global OOM on a 433 GB node.
+        # The chunked update peaks at one parameter's worth of scratch
+        # (~2 GB for the embedding) and applies SGD+Nesterov inline so
+        # the outer optimizer's momentum buffers stay in sync with the
+        # original semantics.
+        #
+        # Within a node, ranks have identical params (FSDP keeps them in
+        # sync), so their pseudo-grads are the same. The all-reduce sums
+        # across world_size ranks; dividing by world_size gives the
+        # correct cross-node average:
+        # SUM / world_size = (local_ws * PG0 + local_ws * PG1) / (nnodes * local_ws)
+        #                  = (PG0 + PG1) / nnodes
         for saved, opt_p, model_p in zip(
             state.saved_params, state.outer_params, model.parameters()
         ):
-            opt_p.grad = saved - model_p.data.float()
-            dist.all_reduce(opt_p.grad, group=outer_gloo_pg)
-            opt_p.grad.div_(world_size)
+            pseudo_grad = saved - model_p.data.float()
+            dist.all_reduce(pseudo_grad, group=outer_gloo_pg)
+            pseudo_grad.div_(world_size)
 
-        # 2. Outer optimizer step (SGD + Nesterov)
-        state.outer_optimizer.step()
-        state.outer_optimizer.zero_grad()
+            opt_state = state.outer_optimizer.state[opt_p]
+            if "momentum_buffer" in opt_state:
+                buf = opt_state["momentum_buffer"]
+                buf.mul_(momentum).add_(pseudo_grad)
+            else:
+                buf = pseudo_grad.detach().clone()
+                opt_state["momentum_buffer"] = buf
 
-        # 3. Write updated params back to model and refresh snapshot
-        for saved, opt_p, model_p in zip(
-            state.saved_params, state.outer_params, model.parameters()
-        ):
+            if nesterov:
+                pseudo_grad.add_(buf, alpha=momentum)
+                update = pseudo_grad
+            else:
+                update = buf
+            opt_p.data.add_(update, alpha=-lr)
+
             model_p.data.copy_(opt_p.data.to(model_p.dtype))
             saved.copy_(opt_p.data)
+
+            del pseudo_grad
+            del update
 
     # Context exit: writeback=True scatters each rank's full params back
     # to FSDP shards.  Since all ranks have identical full params, the
     # resulting shards are consistent.
+
+    _release_cpu_memory()
 
 
 # ---------------------------------------------------------------------------
