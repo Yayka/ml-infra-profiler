@@ -12,3 +12,5 @@ results/*
 __pycache__/
 .claude/worktrees/
 *.pem
+.DS_Store
+logs/
