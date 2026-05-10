@@ -72,7 +72,7 @@ fi
 
 # ---------- Step 2: Wan2.2-T2V-A14B model ----------
 
-if [[ -f "${MODEL_DIR}/model_index.json" ]] || [[ -f "${MODEL_DIR}/config.json" ]]; then
+if [[ -n "$(ls -A ${MODEL_DIR} 2>/dev/null)" ]]; then
     echo "Step 2/2: Model already present — skipping download."
 else
     echo "Step 2/2: Downloading ${MODEL_REPO} (~60-80 GB)..."
@@ -112,8 +112,8 @@ except Exception as e:
     raise
 PYEOF
 
-    if [[ ! -f "${MODEL_DIR}/model_index.json" ]] && [[ ! -f "${MODEL_DIR}/config.json" ]]; then
-        echo "ERROR: Model download incomplete." >&2
+    if [[ -z "$(ls -A ${MODEL_DIR} 2>/dev/null)" ]]; then
+        echo "ERROR: Model download incomplete — directory is empty." >&2
         exit 1
     fi
 fi
