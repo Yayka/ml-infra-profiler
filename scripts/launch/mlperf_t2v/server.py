@@ -66,16 +66,23 @@ async def load_model():
 
     from diffusers import AutoencoderKLWan, WanPipeline
 
-    # VAE must be float32 per reference implementation
-    vae = AutoencoderKLWan.from_pretrained(
-        model_path, subfolder="vae", torch_dtype=torch.float32
-    )
-    pipeline = WanPipeline.from_pretrained(
-        model_path,
-        vae=vae,
-        boundary_ratio=boundary_ratio,
-        torch_dtype=torch.bfloat16,
-    )
+    # Try loading VAE from subfolder (some model variants), fall back to pipeline-only load
+    vae_path = os.path.join(model_path, "vae")
+    if os.path.isdir(vae_path):
+        vae = AutoencoderKLWan.from_pretrained(vae_path, torch_dtype=torch.float32)
+        pipeline = WanPipeline.from_pretrained(
+            model_path,
+            vae=vae,
+            boundary_ratio=boundary_ratio,
+            torch_dtype=torch.bfloat16,
+        )
+    else:
+        # No separate vae/ dir — let WanPipeline load everything from model_index.json
+        pipeline = WanPipeline.from_pretrained(
+            model_path,
+            boundary_ratio=boundary_ratio,
+            torch_dtype=torch.bfloat16,
+        )
     pipeline = pipeline.to("cuda")
     pipeline.set_progress_bar_config(disable=True)
 
