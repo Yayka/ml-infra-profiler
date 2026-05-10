@@ -2,7 +2,8 @@
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
         setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
         build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference \
-        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2
+        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 \
+        setup-mlperf-t2i prepare-mlperf-t2i-data run-mlperf-t2i verify-mlperf-t2i
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -144,6 +145,30 @@ prepare-mlperf-llama2-data:
 # Run Server performance benchmark (vLLM, 2x A100)
 run-mlperf-llama2:
 	bash scripts/launch/mlperf_llama2/run_mlperf_llama2.sh
+
+# --- MLPerf Text-to-Image (Flux.1-schnell) benchmark ---
+
+# Create .venv-t2i with PyTorch + PyYAML
+setup-mlperf-t2i:
+	python3 -m venv .venv-t2i
+	.venv-t2i/bin/pip install --upgrade pip
+	.venv-t2i/bin/pip install torch pyyaml
+
+# Download CC12M subset, COCO-2014 validation, and Flux.1-schnell model weights (~200 GB)
+prepare-mlperf-t2i-data:
+	bash scripts/data/prepare_mlperf_t2i_data.sh
+
+# Launch Flux.1-schnell training across 2 nodes × 2 GPUs via SSH + torchrun.
+# Required env vars: NODES, INTERNAL_IPS, GPUS_PER_NODE, SSH_KEY, SSH_USER
+# Example:
+#   source .env && NODES="$$NODES" INTERNAL_IPS="$$INTERNAL_IPS" \
+#   GPUS_PER_NODE=2 SSH_KEY=$$SSH_KEY SSH_USER=$$SSH_USER make run-mlperf-t2i
+run-mlperf-t2i:
+	bash scripts/launch/mlperf_t2i/run_mlperf_t2i.sh
+
+# Check that final validation loss in results/mlperf_t2i/ is <= 0.586
+verify-mlperf-t2i:
+	bash scripts/launch/mlperf_t2i/verify_run.sh
 
 # --- ml-netprof monitoring agent ---
 
