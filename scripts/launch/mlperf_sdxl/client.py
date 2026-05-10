@@ -118,8 +118,8 @@ class SUT:
                 log.error(f"Request failed for index {qs.index}: {e}")
                 png_bytes = b""
 
-            # Save image to disk
-            img_path = self.image_dir / f"{qs.id}.png"
+            # Save image to disk — use dataset index so accuracy.py can pair with captions
+            img_path = self.image_dir / f"{qs.index}.png"
             img_path.write_bytes(png_bytes)
 
             # Return minimal response token (image path length as proxy)
