@@ -153,7 +153,7 @@ T2I_VENV ?= /data/.venv-t2i
 setup-mlperf-t2i:
 	python3 -m venv $(T2I_VENV)
 	$(T2I_VENV)/bin/pip install --upgrade pip
-	$(T2I_VENV)/bin/pip install torch pyyaml
+	$(T2I_VENV)/bin/pip install torch pyyaml Pillow huggingface_hub
 
 # Download CC12M subset, COCO-2014 validation, and Flux.1-schnell model weights (~200 GB)
 prepare-mlperf-t2i-data:

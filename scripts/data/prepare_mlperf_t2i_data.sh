@@ -15,6 +15,14 @@ set -euo pipefail
 
 DATA_DIR="${DATA_DIR:-/data/mlperf_t2i}"
 HF_TOKEN="${HF_TOKEN:?Set HF_TOKEN for downloading gated models from HuggingFace}"
+T2I_VENV="${T2I_VENV:-/data/.venv-t2i}"
+PYTHON="${T2I_VENV}/bin/python3"
+
+if [[ ! -x "$PYTHON" ]]; then
+    echo "ERROR: venv python not found at $PYTHON"
+    echo "Run: make setup-mlperf-t2i"
+    exit 1
+fi
 
 echo "=== MLPerf T2I Data Preparation ==="
 echo "  Data dir: $DATA_DIR"
@@ -57,7 +65,7 @@ else
     rm -f "$COCO_ZIP"
 
     echo "  Resizing to 256x256..."
-    python3 -c "
+    $PYTHON -c "
 import os, glob
 from PIL import Image
 from pathlib import Path
@@ -82,7 +90,7 @@ print(f'  Done: {len(images)} images in {dst}')
     rm -f "$DATA_DIR/annotations.zip"
 
     echo "  Generating caption sidecar files..."
-    python3 -c "
+    $PYTHON -c "
 import json, os
 from pathlib import Path
 
@@ -122,7 +130,7 @@ if [[ -d "$DATA_DIR/models/flux1-schnell" ]] && [[ -f "$DATA_DIR/models/flux1-sc
     echo "  Flux.1-schnell weights already exist, skipping."
 else
     echo "  Downloading via huggingface_hub..."
-    python3 -c "
+    $PYTHON -c "
 from huggingface_hub import snapshot_download
 import os
 
