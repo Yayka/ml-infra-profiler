@@ -83,7 +83,7 @@ async def load_model():
             boundary_ratio=boundary_ratio,
             torch_dtype=torch.bfloat16,
         )
-        pipeline.to("cuda")
+    pipeline.to("cuda")
     pipeline.set_progress_bar_config(disable=True)
 
     log.info(f"Model loaded in {time.time() - t0:.1f}s on {torch.cuda.device_count()} GPU(s)")
