@@ -8,14 +8,15 @@ server:
   port: 8080
   num_inference_steps: 50
   guidance_scale: 5.0
+  shift: 5.0              # noise schedule shift for Wan2.2
   num_frames: 81          # ~5s at 16fps (MLPerf v6.0 spec)
   fps: 16
   height: 480
   width: 832
 
 model:
-  # Wan2.2-T2V-A14B — check HuggingFace for gating status before download
   pretrained_path: /data/mlperf_t2v/models/Wan2.2-T2V-A14B
+  task: t2v-14B           # WAN_CONFIGS key — run: python -c "from wan.configs import WAN_CONFIGS; print(list(WAN_CONFIGS.keys()))"
 
 data:
   annotations_path: /data/mlperf_t2v/annotations/captions_val2014.json

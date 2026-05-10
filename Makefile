@@ -251,10 +251,11 @@ setup-mlperf-t2v:
 	python3 -m venv $(T2V_VENV)
 	$(T2V_VENV)/bin/pip install --upgrade pip
 	$(T2V_VENV)/bin/pip install \
-		"torch>=2.4" "diffusers>=0.31" transformers accelerate \
+		"torch>=2.4" transformers accelerate \
 		fastapi uvicorn httpx Pillow imageio imageio-ffmpeg \
 		open-clip-torch "torchmetrics[image]" \
-		pyyaml pycocotools mlperf_loadgen
+		pyyaml pycocotools
+	$(T2V_VENV)/bin/pip install git+https://github.com/Wan-AI/Wan2.1.git
 
 # Download COCO 2014 val annotations + Wan2.2-T2V-A14B model weights
 # Check https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B for gating status;
