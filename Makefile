@@ -2,7 +2,8 @@
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
         setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
         build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference \
-        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2
+        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 \
+        setup-mlperf-sdxl prepare-mlperf-sdxl-data run-mlperf-sdxl verify-mlperf-sdxl
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -178,3 +179,33 @@ launch-agent:
 		--queue nanochat-gpu \
 		--entity $$WANDB_ENTITY \
 		--config infra/launch/launch-config.yaml
+
+# --- MLPerf SDXL T2I Inference Benchmark ---
+
+SDXL_VENV ?= /data/.venv-sdxl
+
+# Install Python deps for the SDXL inference benchmark (server + client + accuracy)
+setup-mlperf-sdxl:
+	python3 -m venv $(SDXL_VENV)
+	$(SDXL_VENV)/bin/pip install --upgrade pip
+	$(SDXL_VENV)/bin/pip install \
+		torch diffusers transformers accelerate \
+		fastapi uvicorn httpx Pillow \
+		open-clip-torch "torchmetrics[image]" \
+		pyyaml mlperf_loadgen pycocotools
+
+# Download COCO 2014 val annotations + SDXL-base-1.0 model weights
+prepare-mlperf-sdxl-data:
+	bash scripts/data/prepare_mlperf_sdxl_data.sh
+
+# Launch 2-node benchmark: starts server on SERVER_IP, runs LoadGen locally.
+# Required: SERVER_IP=<gpu-node-ip>
+# Optional: SCENARIO=SingleStream|Offline|all  MAX_QUERY_COUNT=100
+run-mlperf-sdxl:
+	bash scripts/launch/mlperf_sdxl/run_mlperf_sdxl.sh
+
+# Evaluate FID + CLIP scores on saved output images
+verify-mlperf-sdxl:
+	$(SDXL_VENV)/bin/python3 scripts/launch/mlperf_sdxl/accuracy.py \
+		--output-dir /data/mlperf_sdxl/output \
+		--annotations /data/mlperf_sdxl/annotations/captions_val2014.json

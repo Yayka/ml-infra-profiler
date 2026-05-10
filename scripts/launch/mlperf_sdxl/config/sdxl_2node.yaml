@@ -1,0 +1,29 @@
+# sdxl_2node.yaml — MLPerf SDXL T2I inference benchmark config (2-node setup)
+#
+# SERVER_IP env var overrides server.host at runtime:
+#   SERVER_IP=10.0.0.10 make run-mlperf-sdxl
+
+server:
+  host: localhost          # overridden by SERVER_IP env var
+  port: 8080
+  num_inference_steps: 20
+  guidance_scale: 7.5
+  image_size: 1024
+
+model:
+  # SDXL-base-1.0 is not gated — no HF_TOKEN required
+  pretrained_path: /data/mlperf_sdxl/models/sdxl-base-1.0
+
+data:
+  annotations_path: /data/mlperf_sdxl/annotations/captions_val2014.json
+  total_sample_count: 5000
+  output_dir: /data/mlperf_sdxl/output
+
+scenarios:
+  - SingleStream
+  - Offline
+
+loadgen:
+  target_qps: 1.0          # Offline scenario throughput target
+  min_duration_ms: 60000
+  max_query_count: 100      # quick run; set to 5000 for full MLPerf submission
