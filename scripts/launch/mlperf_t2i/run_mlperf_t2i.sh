@@ -59,7 +59,7 @@ for i in $(seq 0 $((NNODES - 1))); do
 set -euo pipefail
 
 cd ~/ml-infra-profiler
-source .venv-t2i/bin/activate
+source /data/.venv-t2i/bin/activate
 
 export NCCL_SOCKET_IFNAME=eth0
 export NCCL_DEBUG=INFO

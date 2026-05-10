@@ -148,11 +148,12 @@ run-mlperf-llama2:
 
 # --- MLPerf Text-to-Image (Flux.1-schnell) benchmark ---
 
-# Create .venv-t2i with PyTorch + PyYAML
+# Create /data/.venv-t2i with PyTorch + PyYAML (uses /data to avoid home disk space issues)
+T2I_VENV ?= /data/.venv-t2i
 setup-mlperf-t2i:
-	python3 -m venv .venv-t2i
-	.venv-t2i/bin/pip install --upgrade pip
-	.venv-t2i/bin/pip install torch pyyaml
+	python3 -m venv $(T2I_VENV)
+	$(T2I_VENV)/bin/pip install --upgrade pip
+	$(T2I_VENV)/bin/pip install torch pyyaml
 
 # Download CC12M subset, COCO-2014 validation, and Flux.1-schnell model weights (~200 GB)
 prepare-mlperf-t2i-data:
