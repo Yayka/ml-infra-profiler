@@ -24,6 +24,6 @@ scenarios:
   - Offline
 
 loadgen:
-  target_qps: 1.0          # Offline scenario throughput target
+  target_qps: 0.5          # matches Llama3.1-8B server scenario QPS
   min_duration_ms: 60000
   max_query_count: 5000     # full MLPerf submission run
