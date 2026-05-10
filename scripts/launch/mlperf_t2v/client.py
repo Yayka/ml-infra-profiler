@@ -92,8 +92,8 @@ class SUT:
         pass
 
     def _process_queries(self):
-        # T2V requests can take 60-300s each — generous timeout
-        with httpx.Client(timeout=600.0) as client:
+        # T2V at 720x1280, 81 frames can take 10-20 min on A100 — no timeout
+        with httpx.Client(timeout=None) as client:
             while True:
                 batch = self.query_queue.get()
                 if batch is None:
