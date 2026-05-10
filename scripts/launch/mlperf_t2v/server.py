@@ -167,6 +167,11 @@ def main():
         server_config["boundary_ratio"] = srv.get("boundary_ratio", 0.875)
         host = srv.get("host", "0.0.0.0")
         port = srv.get("port", 8080)
+        # CLI flags always override config
+        if args.port != 8080:
+            port = args.port
+        if args.host != "0.0.0.0":
+            host = args.host
     else:
         server_config["model_path"] = (
             args.model_path or "Wan-AI/Wan2.2-T2V-A14B-Diffusers"
