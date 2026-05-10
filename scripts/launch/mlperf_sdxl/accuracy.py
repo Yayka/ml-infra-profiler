@@ -112,6 +112,7 @@ def compute_clip_score(
     model, _, preprocess = open_clip.create_model_and_transforms(
         "ViT-H-14", pretrained="laion2b_s32b_b79k", device=device
     )
+    model = model.float()  # ensure float32 — autocast causes precision loss on normalization
     tokenizer = open_clip.get_tokenizer("ViT-H-14")
     model.eval()
 
@@ -123,17 +124,17 @@ def compute_clip_score(
         imgs = generated[i : i + batch_size]
         caps = captions[i : i + batch_size]
 
-        img_tensors = torch.stack([preprocess(img) for img in imgs]).to(device)
+        img_tensors = torch.stack([preprocess(img) for img in imgs]).to(device).float()
         text_tokens = tokenizer(caps).to(device)
 
-        with torch.no_grad(), torch.cuda.amp.autocast():
+        with torch.no_grad():
             img_features = model.encode_image(img_tensors)
             txt_features = model.encode_text(text_tokens)
             img_features = img_features / img_features.norm(dim=-1, keepdim=True)
             txt_features = txt_features / txt_features.norm(dim=-1, keepdim=True)
-            # Cosine similarity, scaled to [0, 100] per CLIP convention
-            batch_scores = (img_features * txt_features).sum(dim=-1) * 100.0
-            scores.extend(batch_scores.cpu().tolist())
+            # Cosine similarity clipped to [0, 1] then scaled to [0, 100] per MLPerf spec
+            batch_scores = (img_features * txt_features).sum(dim=-1).clamp(min=0) * 100.0
+            scores.extend(batch_scores.cpu().float().tolist())
 
     return sum(scores) / len(scores) if scores else 0.0
 
