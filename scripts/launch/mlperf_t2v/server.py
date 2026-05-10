@@ -78,17 +78,12 @@ async def load_model():
         )
     else:
         # No separate vae/ dir — let WanPipeline load everything from model_index.json.
-        # Explicit max_memory forces distribution across GPUs only (excludes CPU).
-        num_gpus = torch.cuda.device_count()
-        max_memory = {i: "79GiB" for i in range(num_gpus)}
-        max_memory["cpu"] = "0GiB"
         pipeline = WanPipeline.from_pretrained(
             model_path,
             boundary_ratio=boundary_ratio,
             torch_dtype=torch.bfloat16,
-            device_map="balanced",
-            max_memory=max_memory,
         )
+        pipeline.to("cuda")
     pipeline.set_progress_bar_config(disable=True)
 
     log.info(f"Model loaded in {time.time() - t0:.1f}s on {torch.cuda.device_count()} GPU(s)")
