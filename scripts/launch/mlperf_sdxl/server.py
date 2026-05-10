@@ -115,6 +115,12 @@ def main():
         host = args.host
         port = args.port
 
+    # CLI flags always win
+    if args.host != "0.0.0.0":
+        host = args.host
+    if args.port != 8080:
+        port = args.port
+
     # Allow env-var override for model path
     server_config["model_path"] = os.environ.get(
         "SDXL_MODEL_PATH", server_config["model_path"]

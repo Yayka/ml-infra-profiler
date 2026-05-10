@@ -4,7 +4,7 @@
 #   SERVER_IP=10.0.0.10 make run-mlperf-sdxl
 
 server:
-  host: localhost          # overridden by SERVER_IP env var
+  host: "0.0.0.0"          # overridden by SERVER_IP env var at client side
   port: 8080
   num_inference_steps: 20
   guidance_scale: 7.5
