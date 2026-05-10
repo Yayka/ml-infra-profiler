@@ -40,13 +40,23 @@ def get_args():
 
 
 def load_generated_images(image_dir: Path) -> list[tuple[str, Image.Image]]:
-    """Return list of (stem, PIL.Image) sorted by stem (= query_id)."""
+    """Return list of (stem, PIL.Image) sorted by stem (= query_id), skipping corrupt files."""
     paths = sorted(image_dir.glob("*.png"), key=lambda p: p.stem)
     if not paths:
         log.error(f"No PNG files found in {image_dir}")
         sys.exit(1)
-    log.info(f"Found {len(paths)} generated images")
-    return [(p.stem, Image.open(p).convert("RGB")) for p in paths]
+    results = []
+    skipped = 0
+    for p in paths:
+        try:
+            img = Image.open(p).convert("RGB")
+            img.load()  # force decode now to catch corrupt files early
+            results.append((p.stem, img))
+        except Exception as e:
+            log.warning(f"Skipping corrupt image {p.name}: {e}")
+            skipped += 1
+    log.info(f"Loaded {len(results)} images ({skipped} skipped as corrupt)")
+    return results
 
 
 def load_captions(annotations_path: str, count: int) -> list[str]:
