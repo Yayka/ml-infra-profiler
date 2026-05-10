@@ -26,4 +26,4 @@ scenarios:
 loadgen:
   target_qps: 1.0          # Offline scenario throughput target
   min_duration_ms: 60000
-  max_query_count: 100      # quick run; set to 5000 for full MLPerf submission
+  max_query_count: 5000     # full MLPerf submission run
