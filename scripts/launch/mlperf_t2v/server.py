@@ -77,13 +77,14 @@ async def load_model():
             torch_dtype=torch.bfloat16,
         )
     else:
-        # No separate vae/ dir — let WanPipeline load everything from model_index.json
+        # No separate vae/ dir — let WanPipeline load everything from model_index.json.
+        # device_map="balanced" splits model layers evenly across all available GPUs.
         pipeline = WanPipeline.from_pretrained(
             model_path,
             boundary_ratio=boundary_ratio,
             torch_dtype=torch.bfloat16,
+            device_map="balanced",
         )
-    pipeline = pipeline.to("cuda")
     pipeline.set_progress_bar_config(disable=True)
 
     log.info(f"Model loaded in {time.time() - t0:.1f}s on {torch.cuda.device_count()} GPU(s)")
