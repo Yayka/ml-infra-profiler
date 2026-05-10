@@ -1,0 +1,32 @@
+# wan_t2v_2node.yaml — MLPerf Wan2.2-T2V-A14B inference benchmark config (2-node)
+#
+# SERVER_IP env var overrides server.host at runtime:
+#   SERVER_IP=10.0.0.10 make run-mlperf-t2v
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  num_inference_steps: 50
+  guidance_scale: 5.0
+  num_frames: 81          # ~5s at 16fps (MLPerf v6.0 spec)
+  fps: 16
+  height: 480
+  width: 832
+
+model:
+  # Wan2.2-T2V-A14B — check HuggingFace for gating status before download
+  pretrained_path: /data/mlperf_t2v/models/Wan2.2-T2V-A14B
+
+data:
+  annotations_path: /data/mlperf_t2v/annotations/captions_val2014.json
+  total_sample_count: 5000
+  output_dir: /data/mlperf_t2v/output
+
+scenarios:
+  - SingleStream
+  - Offline
+
+loadgen:
+  target_qps: 0.5         # matches Llama3.1-8B / SDXL baseline
+  min_duration_ms: 60000
+  max_query_count: 5000

@@ -2,9 +2,9 @@
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
         setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
         build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference \
-        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 \
-        setup-mlperf-sdxl prepare-mlperf-sdxl-data run-mlperf-sdxl verify-mlperf-sdxl
         build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 run-mlperf-llama2-client \
+        setup-mlperf-sdxl prepare-mlperf-sdxl-data run-mlperf-sdxl verify-mlperf-sdxl \
+        setup-mlperf-t2v prepare-mlperf-t2v-data run-mlperf-t2v verify-mlperf-t2v \
         run-moe-smoke run-moe
 
 # One-time setup: submodule, venv, deps
@@ -241,3 +241,35 @@ verify-mlperf-sdxl:
 	$(SDXL_VENV)/bin/python3 scripts/launch/mlperf_sdxl/accuracy.py \
 		--output-dir /data/mlperf_sdxl/output \
 		--annotations /data/mlperf_sdxl/annotations/captions_val2014.json
+
+# --- MLPerf Wan2.2-T2V-A14B Inference Benchmark (v6.0) ---
+
+T2V_VENV ?= /data/.venv-t2v
+
+# Install Python deps for the T2V inference benchmark
+setup-mlperf-t2v:
+	python3 -m venv $(T2V_VENV)
+	$(T2V_VENV)/bin/pip install --upgrade pip
+	$(T2V_VENV)/bin/pip install \
+		"torch>=2.4" "diffusers>=0.31" transformers accelerate \
+		fastapi uvicorn httpx Pillow imageio imageio-ffmpeg \
+		open-clip-torch "torchmetrics[image]" \
+		pyyaml pycocotools mlperf_loadgen
+
+# Download COCO 2014 val annotations + Wan2.2-T2V-A14B model weights
+# Check https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B for gating status;
+# if gated: add HF_TOKEN=hf_... to .env before running.
+prepare-mlperf-t2v-data:
+	bash scripts/data/prepare_mlperf_t2v_data.sh
+
+# Launch 2-node benchmark: starts server on SERVER_IP, runs LoadGen locally.
+# Required: SERVER_IP=<gpu-node-ip>
+# Optional: SCENARIO=SingleStream|Offline|all  MAX_QUERY_COUNT=5000
+run-mlperf-t2v:
+	bash scripts/launch/mlperf_t2v/run_mlperf_t2v.sh
+
+# Evaluate CLIP score on saved output videos
+verify-mlperf-t2v:
+	$(T2V_VENV)/bin/python3 scripts/launch/mlperf_t2v/accuracy.py \
+		--output-dir /data/mlperf_t2v/output \
+		--annotations /data/mlperf_t2v/annotations/captions_val2014.json
