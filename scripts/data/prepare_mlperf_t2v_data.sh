@@ -18,8 +18,9 @@ set -euo pipefail
 
 DATA_DIR="${DATA_DIR:-/data/mlperf_t2v}"
 ANNOTATIONS_DIR="${DATA_DIR}/annotations"
-MODEL_DIR="${DATA_DIR}/models/Wan2.2-T2V-A14B"
-MODEL_REPO="${MODEL_REPO:-Wan-AI/Wan2.2-T2V-A14B}"
+MODEL_DIR="${DATA_DIR}/models/Wan2.2-T2V-A14B-Diffusers"
+# Use the Diffusers variant — the native Wan format is NOT compatible with diffusers WanPipeline
+MODEL_REPO="${MODEL_REPO:-Wan-AI/Wan2.2-T2V-A14B-Diffusers}"
 
 # Reuse COCO annotations from other benchmarks if available
 COCO_REUSE_PATHS=(

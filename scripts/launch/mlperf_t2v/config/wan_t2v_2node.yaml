@@ -1,4 +1,7 @@
-# wan_t2v_2node.yaml — MLPerf Wan2.2-T2V-A14B inference benchmark config (2-node)
+# wan_t2v_2node.yaml — MLPerf Wan2.2-T2V-A14B-Diffusers inference benchmark config (2-node)
+#
+# Parameters match the MLCommons reference implementation:
+#   github.com/mlcommons/inference/tree/master/text_to_video/wan-2.2-t2v-a14b
 #
 # SERVER_IP env var overrides server.host at runtime:
 #   SERVER_IP=10.0.0.10 make run-mlperf-t2v
@@ -6,17 +9,18 @@
 server:
   host: "0.0.0.0"
   port: 8080
-  num_inference_steps: 50
-  guidance_scale: 5.0
-  shift: 5.0              # noise schedule shift for Wan2.2
-  num_frames: 81          # ~5s at 16fps (MLPerf v6.0 spec)
+  num_inference_steps: 20
+  guidance_scale: 4.0
+  guidance_scale_2: 3.0    # Wan2.2-specific second guidance scale
+  boundary_ratio: 0.875     # Wan2.2-specific noise boundary
+  num_frames: 81            # ~5s at 16fps
   fps: 16
-  height: 480
-  width: 832
+  height: 720
+  width: 1280
 
 model:
-  pretrained_path: /data/mlperf_t2v/models/Wan2.2-T2V-A14B
-  task: t2v-14B           # WAN_CONFIGS key — run: python -c "from wan.configs import WAN_CONFIGS; print(list(WAN_CONFIGS.keys()))"
+  # IMPORTANT: use the Diffusers variant, NOT Wan-AI/Wan2.2-T2V-A14B
+  pretrained_path: /data/mlperf_t2v/models/Wan2.2-T2V-A14B-Diffusers
 
 data:
   annotations_path: /data/mlperf_t2v/annotations/captions_val2014.json
@@ -28,6 +32,6 @@ scenarios:
   - Offline
 
 loadgen:
-  target_qps: 0.5         # matches Llama3.1-8B / SDXL baseline
+  target_qps: 0.5
   min_duration_ms: 60000
   max_query_count: 5000
