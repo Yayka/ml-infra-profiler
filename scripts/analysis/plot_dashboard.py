@@ -60,19 +60,24 @@ def parse_value(s: str) -> float:
 
 
 def clean_label(raw: str) -> str:
-    """Normalize a Grafana series label to a human-readable form."""
-    # {instance="1.2.3.4:9100", transport="ethernet"}
-    m = re.match(r'\{instance="([^"]+):9100",\s*transport="([^"]+)"\}', raw)
-    if m:
-        return f"{m.group(1)} ({m.group(2)})"
+    """Normalize a Grafana series label to a generic, IP-free form.
 
-    # 1.2.3.4:9100direction: rx gpu_index: 0
-    m = re.match(r"([\d.]+):9100direction:\s*(\w+)\s+gpu_index:\s*(\d+)", raw)
+    Drops `<host>:9100` instance identifiers (Prometheus scrape targets) so
+    the rendered legend only shows the descriptive part of each series
+    (transport / interface / GPU index).
+    """
+    # {instance="1.2.3.4:9100", transport="ethernet"} -> "ethernet"
+    m = re.match(r'\{instance="[^"]+:9100",\s*transport="([^"]+)"\}', raw)
     if m:
-        return f"{m.group(1)} {m.group(2)} GPU {m.group(3)}"
+        return m.group(1)
 
-    # 1.2.3.4:9100 eth0 rx
-    cleaned = re.sub(r":9100\b", "", raw)
+    # 1.2.3.4:9100direction: rx gpu_index: 0 -> "rx GPU 0"
+    m = re.match(r"[\d.]+:9100direction:\s*(\w+)\s+gpu_index:\s*(\d+)", raw)
+    if m:
+        return f"{m.group(1)} GPU {m.group(2)}"
+
+    # 1.2.3.4:9100 eth0 rx -> "eth0 rx"
+    cleaned = re.sub(r"[\d.]+:9100\s*", "", raw)
     return cleaned.strip()
 
 

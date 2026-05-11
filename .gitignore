@@ -4,7 +4,13 @@ wandb/
 results/*
 !results/mlperf_tiny_v1.1/
 !results/mlperf_inference_v5.0/
+!results/baseline/
+!results/diloco/
+!results/baseline_vs_diloco.png
+!results/moe/
 .venv/
 __pycache__/
 .claude/worktrees/
 *.pem
+.DS_Store
+logs/

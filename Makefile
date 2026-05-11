@@ -2,7 +2,8 @@
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
         setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
         build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference \
-        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 run-mlperf-llama2-client
+        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 run-mlperf-llama2-client \
+        run-moe-smoke run-moe
 
 # One-time setup: submodule, venv, deps
 # Note: nanochat pins torch==2.9.1; if pip can't resolve it from PyPI on macOS arm64,
@@ -163,6 +164,30 @@ agent-start:
 
 agent-test:
 	go test -C agent ./...
+
+# --- MoE pretraining (FSDP, multi-node) ---
+
+# Smoke test: tiny model, fake data, 5 steps. Should finish in <2 minutes.
+# Override NODES/INTERNAL_IPS if your cluster differs.
+run-moe-smoke:
+	NODES="$${NODES:-20.29.43.19 172.212.226.225}" \
+	INTERNAL_IPS="$${INTERNAL_IPS:-172.21.0.4 172.21.0.5}" \
+	GPUS_PER_NODE=2 \
+	SSH_KEY=$${SSH_KEY:-$$HOME/.ssh/gpu-ib_key.pem} \
+	SSH_USER=$${SSH_USER:-azureuser} \
+	MAX_STEPS=5 FAKE_DATA=1 RUN_TAG=smoke MODEL_SIZE=moe-tiny \
+	LOG_EVERY_N_STEPS=1 WARMUP_STEPS=2 \
+	bash scripts/launch/mlperf_moe/run_moe_multinode.sh
+
+# Production run: 2-3h, scaled for network profiling
+run-moe:
+	NODES="$${NODES:-20.29.43.19 172.212.226.225}" \
+	INTERNAL_IPS="$${INTERNAL_IPS:-172.21.0.4 172.21.0.5}" \
+	GPUS_PER_NODE=2 \
+	SSH_KEY=$${SSH_KEY:-$$HOME/.ssh/gpu-ib_key.pem} \
+	SSH_USER=$${SSH_USER:-azureuser} \
+	MAX_STEPS=$${MAX_STEPS:-2000} FAKE_DATA=1 RUN_TAG=$${RUN_TAG:-prod} \
+	bash scripts/launch/mlperf_moe/run_moe_multinode.sh
 
 # --- W&B Launch ---
 
