@@ -116,12 +116,32 @@ def packets_formatter(val, _pos):
     return f"{int(val)} p/s"
 
 
+def apply_log_scale(ax):
+    """Set log y-scale with minor gridlines at 2×, 3×, 5× each decade."""
+    ax.set_yscale("log")
+    ax.yaxis.set_minor_locator(ticker.LogLocator(subs=[2, 3, 5], numticks=20))
+    ax.grid(True, which="minor", color="#eeeeee", linewidth=0.5, alpha=0.6)
+
+
+def adaptive_bytes_formatter(val, _pos):
+    """Per-tick adaptive formatter — works correctly on log-scale axes."""
+    if val <= 0:
+        return ""
+    if val >= 1e9:
+        return f"{val/1e9:.3g} GB/s"
+    if val >= 1e6:
+        return f"{val/1e6:.3g} MB/s"
+    if val >= 1e3:
+        return f"{val/1e3:.3g} kB/s"
+    return f"{val:.3g} B/s"
+
+
 # Map filename-pattern keywords to panel metadata
 PANEL_ORDER = [
-    ("Ethernet*Bytes*", "Internode Links Usage", "bytes"),
-    ("Ethernet*Packets*", "Internode Links Packets/s", "packets"),
-    ("network interface*", "Network Interface Usage Cumulative Total", "bytes"),
-    ("PCIe*", "Intranode Links Usage", "bytes"),
+    ("Ethernet*Bytes*",    "Internode Bytes Sent",           "bytes"),
+    ("Ethernet*Packets*",  "Internode Packets Sent",         "packets"),
+    ("network interface*", "Internode Cumulative Bytes Sent","bytes"),
+    ("PCIe*",              "Intranode Bytes Sent",           "bytes"),
 ]
 
 
@@ -267,14 +287,10 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> 
     # "network interface usage total" exports cumulative byte counters, so differentiate=True
     # converts them to instantaneous rates before plotting.
     panels = [
-        ("Ethernet*Bytes*",    "Internode Bytes Sent",
-         "bytes",   True,  False, False, False, "GB/s"),
-        ("Ethernet*Packets*",  "Internode Packets Sent",
-         "packets", True,  False, False, False, None),
-        ("PCIe*",              "Intranode Bytes Sent",
-         "bytes",   True,  False, False, False, None),
-        ("network interface*", "Internode Cumulative Bytes Sent",
-         "bytes",   True,  True,  False, True,  "GB"),
+        ("Ethernet*Bytes*",    "Internode Bytes Sent",            "bytes",   True,  True,  False, False, None),
+        ("Ethernet*Packets*",  "Internode Packets Sent",          "packets", True,  True,  False, False, None),
+        ("PCIe*",              "Intranode Bytes Sent",            "bytes",   True,  False, False, False, None),
+        ("network interface*", "Internode Cumulative Bytes Sent", "bytes",   True,  True,  False, True,  "GB"),
     ]
 
     # Clip both runs to the shorter duration so x-axes align.
@@ -293,9 +309,11 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> 
             train_folder, pattern, max_minutes=max_t, differentiate=diff, use_sum=use_sum)
 
         ax.set_facecolor("white")
-        ax.plot(t_inf, v_inf, color=INF_COLOR,
+        # clip to a small positive floor so log scale doesn't break on zeros
+        floor = 1e-3 if unit_type == "packets" else 1.0
+        ax.plot(t_inf, np.maximum(v_inf, floor), color=INF_COLOR,
                 linewidth=1.6, label="Inference")
-        ax.plot(t_train, v_train, color=TRAIN_COLOR,
+        ax.plot(t_train, np.maximum(v_train, floor), color=TRAIN_COLOR,
                 linewidth=1.6, label="Training")
 
         if add_threshold:
@@ -334,7 +352,7 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> 
         ax.tick_params(axis="y", labelsize=8, colors="#333333")
 
         if log_scale:
-            ax.set_yscale("log")
+            apply_log_scale(ax)
 
         all_vals = np.concatenate([v_inf, v_train])
         y_max = float(all_vals.max()) if len(all_vals) else 1.0
@@ -344,9 +362,15 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> 
         elif force_unit == "GB":
             ax.yaxis.set_major_formatter(
                 ticker.FuncFormatter(lambda v, _: f"{v/1e9:.2f} GB"))
+        elif unit_type == "bytes" and log_scale:
+            ax.yaxis.set_major_formatter(
+                ticker.FuncFormatter(adaptive_bytes_formatter))
         elif unit_type == "bytes":
             ax.yaxis.set_major_formatter(
                 ticker.FuncFormatter(bytes_formatter(y_max)))
+        elif unit_type == "packets" and log_scale:
+            ax.yaxis.set_major_formatter(
+                ticker.FuncFormatter(packets_formatter))
         else:
             ax.yaxis.set_major_formatter(
                 ticker.FuncFormatter(packets_formatter))
@@ -376,7 +400,7 @@ def plot_internode_bytes(inf_folder: Path, train_folder: Path, output_path: Path
     THRESH_COLOR = "#888888"
 
     pattern, panel_title, unit_type, add_threshold, log_scale, diff, use_sum, force_unit = (
-        "Ethernet*Bytes*", "Internode Bytes Sent", "bytes", True, False, False, False, "GB/s"
+        "Ethernet*Bytes*", "Internode Bytes Sent", "bytes", True, True, False, False, None
     )
 
     t_inf_end = load_and_aggregate(inf_folder, pattern)[0][-1]
@@ -390,8 +414,8 @@ def plot_internode_bytes(inf_folder: Path, train_folder: Path, output_path: Path
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    ax.plot(t_inf, v_inf, color=INF_COLOR, linewidth=1.6, label="Inference")
-    ax.plot(t_train, v_train, color=TRAIN_COLOR, linewidth=1.6, label="Training")
+    ax.plot(t_inf, np.maximum(v_inf, 1.0), color=INF_COLOR, linewidth=1.6, label="Inference")
+    ax.plot(t_train, np.maximum(v_train, 1.0), color=TRAIN_COLOR, linewidth=1.6, label="Training")
 
     if add_threshold:
         med_train = float(np.median(v_train[v_train > 0])) if (v_train > 0).any() else 0
@@ -413,11 +437,14 @@ def plot_internode_bytes(inf_folder: Path, train_folder: Path, output_path: Path
                 transform=ax.get_yaxis_transform(),
             )
 
+    if log_scale:
+        apply_log_scale(ax)
+
     ax.set_title(panel_title, fontsize=12, fontweight="bold", color="#333333", pad=8)
     ax.set_xlabel("Elapsed time (min)", fontsize=9, color="#333333")
     ax.tick_params(axis="x", labelsize=8, colors="#333333")
     ax.tick_params(axis="y", labelsize=8, colors="#333333")
-    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: f"{v/1e9:.2f} GB/s"))
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(adaptive_bytes_formatter))
     ax.legend(loc="upper left", fontsize=9, framealpha=0.7, edgecolor="#cccccc")
     ax.spines[["top", "right"]].set_visible(False)
     ax.spines[["left", "bottom"]].set_color("#cccccc")

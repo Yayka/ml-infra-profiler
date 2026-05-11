@@ -92,6 +92,18 @@ def get_args():
         help="Maximum number of tokens to generate per query",
     )
     parser.add_argument("--vllm", action="store_true", help="vllm mode")
+    parser.add_argument(
+        "--api-server",
+        type=str,
+        default=None,
+        help="Base URL of remote vLLM server (e.g. http://10.0.0.10:8000). Skips local model load.",
+    )
+    parser.add_argument(
+        "--api-model-name",
+        type=str,
+        default=None,
+        help="Model name as registered with --served-model-name on the server.",
+    )
 
     args = parser.parse_args()
     return args
@@ -125,25 +137,36 @@ def main():
     log_settings.log_output = log_output_settings
     log_settings.enable_trace = args.enable_log_trace
 
-    if args.vllm:
-        from SUT_VLLM import SUT, SUTServer
-    else:
+    if not args.vllm:
         raise NotImplementedError
 
-    sut_map = {"offline": SUT, "server": SUTServer}
-
-    sut_cls = sut_map[args.scenario.lower()]
-
-    sut = sut_cls(
-        model_path=args.model_path,
-        dtype=args.dtype,
-        batch_size=args.batch_size,
-        dataset_path=args.dataset_path,
-        total_sample_count=args.total_sample_count,
-        workers=args.num_workers,
-        tensor_parallel_size=args.tensor_parallel_size,
-        max_output_tokens=args.max_output_tokens,
-    )
+    if args.api_server:
+        from SUT_VLLM import SUTHTTPClient, SUTHTTPClientServer
+        sut_cls = {"offline": SUTHTTPClient, "server": SUTHTTPClientServer}[args.scenario.lower()]
+        sut = sut_cls(
+            model_path=args.model_path,
+            dtype=args.dtype,
+            batch_size=args.batch_size,
+            dataset_path=args.dataset_path,
+            total_sample_count=args.total_sample_count,
+            workers=args.num_workers,
+            max_output_tokens=args.max_output_tokens,
+            server_url=args.api_server,
+            api_model_name=args.api_model_name or args.model_path,
+        )
+    else:
+        from SUT_VLLM import SUT, SUTServer
+        sut_cls = {"offline": SUT, "server": SUTServer}[args.scenario.lower()]
+        sut = sut_cls(
+            model_path=args.model_path,
+            dtype=args.dtype,
+            batch_size=args.batch_size,
+            dataset_path=args.dataset_path,
+            total_sample_count=args.total_sample_count,
+            workers=args.num_workers,
+            tensor_parallel_size=args.tensor_parallel_size,
+            max_output_tokens=args.max_output_tokens,
+        )
 
     sut.start()
     lgSUT = lg.ConstructSUT(sut.issue_queries, sut.flush_queries)

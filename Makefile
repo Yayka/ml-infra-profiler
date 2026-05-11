@@ -2,7 +2,7 @@
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
         setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
         build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference \
-        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 \
+        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 run-mlperf-llama2-client \
         run-moe-smoke run-moe
 
 # One-time setup: submodule, venv, deps
@@ -142,9 +142,15 @@ build-mlperf-llama2:
 prepare-mlperf-llama2-data:
 	bash scripts/data/prepare_mlperf_llama2_data.sh
 
-# Run Server performance benchmark (vLLM, 2x A100)
+# Run vLLM OpenAI API server (Node A — has GPUs + model weights). Blocks until Ctrl-C.
+# Node B then runs: SERVER_URL=http://<node-a-ip>:8000 make run-mlperf-llama2-client
 run-mlperf-llama2:
-	bash scripts/launch/mlperf_llama2/run_mlperf_llama2.sh
+	bash scripts/launch/mlperf_llama2/run_server.sh
+
+# Run LoadGen benchmark client (Node B — sends HTTP requests to Node A).
+# Requires SERVER_URL env var pointing to the server started by run-mlperf-llama2.
+run-mlperf-llama2-client:
+	bash scripts/launch/mlperf_llama2/run_client.sh
 
 # --- ml-netprof monitoring agent ---
 
