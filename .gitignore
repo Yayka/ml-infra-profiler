@@ -7,6 +7,10 @@ results/*
 !results/baseline/
 !results/diloco/
 !results/baseline_vs_diloco.png
+!results/comparison.png
+!results/comparison_moe.png
+!results/inference/
+!results/distributed inference/
 !results/moe/
 .venv/
 __pycache__/
