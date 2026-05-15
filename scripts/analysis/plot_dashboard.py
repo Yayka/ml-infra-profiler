@@ -280,7 +280,6 @@ def load_and_aggregate(
 
 def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
                     title: str = "Inference vs Training (Llama 3.1 8B)") -> None:
-    plt.style.use("seaborn-v0_8-whitegrid")
     INF_COLOR = "#1f77b4"   # blue  — Distributed Inference
     TRAIN_COLOR = "#d62728"  # red   — Training
     THRESH_COLOR = "#ff7f0e"  # orange
@@ -301,6 +300,7 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
     max_t = min(t_inf_end, t_train_end)
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 7))
+    fig.patch.set_facecolor("white")
 
     for ax, (pattern, panel_title, unit_type, threshold_value, log_scale, diff, use_sum, force_unit) in zip(axes.flat, panels):
         t_inf, v_inf = load_and_aggregate(
@@ -308,6 +308,7 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
         t_train, v_train = load_and_aggregate(
             train_folder, pattern, max_minutes=max_t, differentiate=diff, use_sum=use_sum)
 
+        ax.set_facecolor("white")
         floor = 1e-3 if unit_type == "packets" else 1.0
         ax.plot(t_inf, np.maximum(v_inf, floor), color=INF_COLOR,
                 linewidth=1.6, label="Inference")
@@ -380,7 +381,8 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
                 ticker.FuncFormatter(packets_formatter))
 
         ax.spines[["top", "right"]].set_visible(False)
-        ax.grid(True, linewidth=0.4, alpha=0.5)
+        ax.spines[["left", "bottom"]].set_color("#cccccc")
+        ax.grid(True, color="#eeeeee", linewidth=0.8)
 
     fig.suptitle(
         title,
@@ -394,9 +396,8 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
     fig.legend(handles, labels, loc="upper center", ncol=2, fontsize=9,
                framealpha=0.7, edgecolor="#cccccc",
                bbox_to_anchor=(0.5, 1.0))
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    plt.style.use("default")
     print(f"Saved: {output_path}")
 
 
@@ -407,7 +408,6 @@ def plot_internode_bytes(
     title: str = "Internode Bytes Sent",
     threshold: float = 1e6,
 ) -> None:
-    plt.style.use("seaborn-v0_8-whitegrid")
     THRESH_COLOR = "#ff7f0e"
     INF_COLOR = "#1f77b4"
     TRAIN_COLORS = ["#d62728", "#2ca02c", "#9467bd", "#8c564b"]
@@ -419,6 +419,8 @@ def plot_internode_bytes(
     max_t = min(ends)
 
     fig, ax = plt.subplots(figsize=(10, 5))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
 
     t_inf, v_inf = load_and_aggregate(inf_folder, pattern, max_minutes=max_t)
     ax.plot(t_inf, np.maximum(v_inf, 1.0), color=INF_COLOR, linewidth=1.6, label="Inference")
@@ -450,12 +452,12 @@ def plot_internode_bytes(
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(adaptive_bytes_formatter))
     ax.legend(fontsize=9, framealpha=0.7, edgecolor="#cccccc")
     ax.spines[["top", "right"]].set_visible(False)
-    ax.grid(True, linewidth=0.4, alpha=0.5)
+    ax.spines[["left", "bottom"]].set_color("#cccccc")
+    ax.grid(True, color="#eeeeee", linewidth=0.8)
 
     fig.tight_layout()
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    plt.style.use("default")
     print(f"Saved: {output_path}")
 
 
