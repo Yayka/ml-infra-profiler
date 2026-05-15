@@ -441,21 +441,22 @@ def plot_internode_bytes(
             thresh_str = f"{_fmt_num(thresh)} B/s"
         ax.axhline(thresh, color=THRESH_COLOR, linewidth=1.2, linestyle="--", zorder=0)
         ax.text(1.0, thresh, f"bandwidth limit ({thresh_str})",
-                color=THRESH_COLOR, fontsize=8, va="bottom", ha="right",
+                color=THRESH_COLOR, fontsize=16, va="bottom", ha="right",
                 transform=ax.get_yaxis_transform())
 
     apply_log_scale(ax)
-    ax.set_title(title, fontsize=14, fontweight="bold", color="#333333", pad=8)
-    ax.set_xlabel("Elapsed time (min)", fontsize=9, color="#333333")
-    ax.tick_params(axis="x", labelsize=8, colors="#333333")
-    ax.tick_params(axis="y", labelsize=8, colors="#333333")
+    ax.set_title(title, fontsize=26, fontweight="bold", color="#333333", pad=16)
+    ax.tick_params(axis="x", labelsize=16, colors="#333333")
+    ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=5, integer=True))
+    ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: f"{int(v)} min"))
+    ax.tick_params(axis="y", labelsize=16, colors="#333333")
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(adaptive_bytes_formatter))
     ax.spines[["top", "right"]].set_visible(False)
     ax.spines[["left", "bottom"]].set_color("#cccccc")
     ax.grid(True, color="#eeeeee", linewidth=0.8)
 
     fig.tight_layout()
-    ax.legend(fontsize=9, framealpha=0.7, edgecolor="#cccccc",
+    ax.legend(fontsize=16, framealpha=0.7, edgecolor="#cccccc",
               loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
     fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
