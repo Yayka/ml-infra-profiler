@@ -379,6 +379,9 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
             ax.yaxis.set_major_formatter(
                 ticker.FuncFormatter(packets_formatter))
 
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.grid(True, linewidth=0.4, alpha=0.5)
+
     fig.suptitle(
         title,
         fontsize=14,
