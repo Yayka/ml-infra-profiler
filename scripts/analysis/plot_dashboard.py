@@ -278,19 +278,19 @@ def load_and_aggregate(
     return t, v
 
 
-def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> None:
+def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
+                    title: str = "Inference vs Training (Llama 3.1 8B)") -> None:
     INF_COLOR = "#1f77b4"   # blue  — Distributed Inference
     TRAIN_COLOR = "#d62728"  # red   — Training
-    THRESH_COLOR = "#888888"
+    THRESH_COLOR = "#ff7f0e"  # orange
 
-    # Panels: (pattern, title, unit_type, add_threshold, log_scale, differentiate)
-    # "network interface usage total" exports cumulative byte counters, so differentiate=True
-    # converts them to instantaneous rates before plotting.
+    # Panels: (pattern, title, unit_type, threshold_value, log_scale, differentiate, use_sum, force_unit)
+    # threshold_value: None = no line, float = fixed value in base units
     panels = [
-        ("Ethernet*Bytes*",    "Internode Bytes Sent",            "bytes",   True,  True,  False, False, None),
-        ("Ethernet*Packets*",  "Internode Packets Sent",          "packets", True,  True,  False, False, None),
-        ("PCIe*",              "Intranode Bytes Sent",            "bytes",   True,  False, False, False, None),
-        ("network interface*", "Internode Cumulative Bytes Sent", "bytes",   True,  True,  False, True,  "GB"),
+        ("Ethernet*Bytes*",    "Internode Bytes Sent",            "bytes",   1e6,   True,  False, False, None),
+        ("Ethernet*Packets*",  "Internode Packets Sent",          "packets", 100,   True,  False, False, None),
+        ("PCIe*",              "Intranode Bytes Sent",            "bytes",   None,  False, False, False, None),
+        ("network interface*", "Internode Cumulative Bytes Sent", "bytes",   2e9,   True,  False, True,  "GB"),
     ]
 
     # Clip both runs to the shorter duration so x-axes align.
@@ -302,25 +302,28 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> 
     fig, axes = plt.subplots(2, 2, figsize=(12, 7))
     fig.patch.set_facecolor("white")
 
-    for ax, (pattern, panel_title, unit_type, add_threshold, log_scale, diff, use_sum, force_unit) in zip(axes.flat, panels):
+    for ax, (pattern, panel_title, unit_type, threshold_value, log_scale, diff, use_sum, force_unit) in zip(axes.flat, panels):
         t_inf, v_inf = load_and_aggregate(
             inf_folder, pattern, max_minutes=max_t, differentiate=diff, use_sum=use_sum)
         t_train, v_train = load_and_aggregate(
             train_folder, pattern, max_minutes=max_t, differentiate=diff, use_sum=use_sum)
 
         ax.set_facecolor("white")
-        # clip to a small positive floor so log scale doesn't break on zeros
         floor = 1e-3 if unit_type == "packets" else 1.0
         ax.plot(t_inf, np.maximum(v_inf, floor), color=INF_COLOR,
                 linewidth=1.6, label="Inference")
         ax.plot(t_train, np.maximum(v_train, floor), color=TRAIN_COLOR,
                 linewidth=1.6, label="Training")
 
-        if add_threshold:
-            med_train = float(np.median(v_train[v_train > 0])) if (
-                v_train > 0).any() else 0
-            if med_train > 0:
-                thresh = med_train / 100
+        if threshold_value is not None and threshold_value is not False:
+            if threshold_value is True:
+                med_train = float(np.median(v_train[v_train > 0])) if (
+                    v_train > 0).any() else 0
+                thresh = med_train / 100 if med_train > 0 else None
+            else:
+                thresh = float(threshold_value)
+
+            if thresh is not None and thresh > 0:
                 if unit_type == "packets":
                     if thresh >= 1e6:
                         thresh_str = f"{_fmt_num(thresh/1e6)}M p/s"
@@ -328,6 +331,8 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> 
                         thresh_str = f"{_fmt_num(thresh/1e3)}k p/s"
                     else:
                         thresh_str = f"{_fmt_num(thresh)} p/s"
+                elif force_unit == "GB":
+                    thresh_str = f"{thresh/1e9:.0f} GB"
                 elif thresh >= 1e9:
                     thresh_str = f"{_fmt_num(thresh/1e9)} GB/s"
                 elif thresh >= 1e6:
@@ -375,82 +380,84 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path) -> 
             ax.yaxis.set_major_formatter(
                 ticker.FuncFormatter(packets_formatter))
 
-        ax.legend(loc="upper left", fontsize=8,
-                  framealpha=0.7, edgecolor="#cccccc")
         ax.spines[["top", "right"]].set_visible(False)
         ax.spines[["left", "bottom"]].set_color("#cccccc")
         ax.grid(True, color="#eeeeee", linewidth=0.8)
 
     fig.suptitle(
-        "Distributed Inference vs Training Communication — Single Node View",
+        title,
         fontsize=14,
         fontweight="bold",
         color="#333333",
-        y=1.01,
+        y=1.04,
     )
     fig.tight_layout()
+    handles, labels = axes.flat[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=2, fontsize=9,
+               framealpha=0.7, edgecolor="#cccccc",
+               bbox_to_anchor=(0.5, 1.0))
     fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"Saved: {output_path}")
 
 
-def plot_internode_bytes(inf_folder: Path, train_folder: Path, output_path: Path) -> None:
+def plot_internode_bytes(
+    inf_folder: Path,
+    train_folders: list[tuple[Path, str]],
+    output_path: Path,
+    title: str = "Internode Bytes Sent",
+    threshold: float = 1e6,
+) -> None:
+    THRESH_COLOR = "#ff7f0e"
     INF_COLOR = "#1f77b4"
-    TRAIN_COLOR = "#d62728"
-    THRESH_COLOR = "#888888"
+    TRAIN_COLORS = ["#d62728", "#2ca02c", "#9467bd", "#8c564b"]
+    pattern = "Ethernet*Bytes*"
 
-    pattern, panel_title, unit_type, add_threshold, log_scale, diff, use_sum, force_unit = (
-        "Ethernet*Bytes*", "Internode Bytes Sent", "bytes", True, True, False, False, None
-    )
+    ends = [load_and_aggregate(inf_folder, pattern)[0][-1]]
+    for folder, _ in train_folders:
+        ends.append(load_and_aggregate(folder, pattern)[0][-1])
+    max_t = min(ends)
 
-    t_inf_end = load_and_aggregate(inf_folder, pattern)[0][-1]
-    t_train_end = load_and_aggregate(train_folder, pattern)[0][-1]
-    max_t = min(t_inf_end, t_train_end)
-
-    t_inf, v_inf = load_and_aggregate(inf_folder, pattern, max_minutes=max_t)
-    t_train, v_train = load_and_aggregate(train_folder, pattern, max_minutes=max_t)
-
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(10, 5))
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
+    t_inf, v_inf = load_and_aggregate(inf_folder, pattern, max_minutes=max_t)
     ax.plot(t_inf, np.maximum(v_inf, 1.0), color=INF_COLOR, linewidth=1.6, label="Inference")
-    ax.plot(t_train, np.maximum(v_train, 1.0), color=TRAIN_COLOR, linewidth=1.6, label="Training")
 
-    if add_threshold:
-        med_train = float(np.median(v_train[v_train > 0])) if (v_train > 0).any() else 0
-        if med_train > 0:
-            thresh = med_train / 100
-            if thresh >= 1e9:
-                thresh_str = f"{_fmt_num(thresh/1e9)} GB/s"
-            elif thresh >= 1e6:
-                thresh_str = f"{_fmt_num(thresh/1e6)} MB/s"
-            elif thresh >= 1e3:
-                thresh_str = f"{_fmt_num(thresh/1e3)} kB/s"
-            else:
-                thresh_str = f"{_fmt_num(thresh)} B/s"
-            ax.axhline(thresh, color=THRESH_COLOR, linewidth=1.2, linestyle="--", zorder=0)
-            ax.text(
-                1.0, thresh,
-                f"bandwidth limit ({thresh_str})",
-                color=THRESH_COLOR, fontsize=8, va="bottom", ha="right",
-                transform=ax.get_yaxis_transform(),
-            )
+    for (folder, label), color in zip(train_folders, TRAIN_COLORS):
+        t, v = load_and_aggregate(folder, pattern, max_minutes=max_t)
+        ax.plot(t, np.maximum(v, 1.0), color=color, linewidth=1.6, label=label)
 
-    if log_scale:
-        apply_log_scale(ax)
+    if threshold:
+        thresh = float(threshold)
+        if thresh >= 1e9:
+            thresh_str = f"{_fmt_num(thresh/1e9)} GB/s"
+        elif thresh >= 1e6:
+            thresh_str = f"{_fmt_num(thresh/1e6)} MB/s"
+        elif thresh >= 1e3:
+            thresh_str = f"{_fmt_num(thresh/1e3)} kB/s"
+        else:
+            thresh_str = f"{_fmt_num(thresh)} B/s"
+        ax.axhline(thresh, color=THRESH_COLOR, linewidth=1.2, linestyle="--", zorder=0)
+        ax.text(1.0, thresh, f"bandwidth limit ({thresh_str})",
+                color=THRESH_COLOR, fontsize=16, va="bottom", ha="right",
+                transform=ax.get_yaxis_transform())
 
-    ax.set_title(panel_title, fontsize=12, fontweight="bold", color="#333333", pad=8)
-    ax.set_xlabel("Elapsed time (min)", fontsize=9, color="#333333")
-    ax.tick_params(axis="x", labelsize=8, colors="#333333")
-    ax.tick_params(axis="y", labelsize=8, colors="#333333")
+    apply_log_scale(ax)
+    ax.set_title(title, fontsize=26, fontweight="bold", color="#333333", pad=16)
+    ax.tick_params(axis="x", labelsize=16, colors="#333333")
+    ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=5, integer=True))
+    ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: f"{int(v)} min"))
+    ax.tick_params(axis="y", labelsize=16, colors="#333333")
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(adaptive_bytes_formatter))
-    ax.legend(loc="upper left", fontsize=9, framealpha=0.7, edgecolor="#cccccc")
     ax.spines[["top", "right"]].set_visible(False)
     ax.spines[["left", "bottom"]].set_color("#cccccc")
     ax.grid(True, color="#eeeeee", linewidth=0.8)
 
     fig.tight_layout()
+    ax.legend(fontsize=16, framealpha=0.7, edgecolor="#cccccc",
+              loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
     fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"Saved: {output_path}")
