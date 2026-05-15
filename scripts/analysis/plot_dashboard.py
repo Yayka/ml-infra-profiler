@@ -400,65 +400,62 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
     print(f"Saved: {output_path}")
 
 
-def plot_internode_bytes(inf_folder: Path, train_folder: Path, output_path: Path) -> None:
+def plot_internode_bytes(
+    inf_folder: Path,
+    train_folders: list[tuple[Path, str]],
+    output_path: Path,
+    title: str = "Internode Bytes Sent",
+    threshold: float = 1e6,
+) -> None:
+    plt.style.use("seaborn-v0_8-whitegrid")
+    THRESH_COLOR = "#ff7f0e"
     INF_COLOR = "#1f77b4"
-    TRAIN_COLOR = "#d62728"
-    THRESH_COLOR = "#888888"
+    TRAIN_COLORS = ["#d62728", "#2ca02c", "#9467bd", "#8c564b"]
+    pattern = "Ethernet*Bytes*"
 
-    pattern, panel_title, unit_type, add_threshold, log_scale, diff, use_sum, force_unit = (
-        "Ethernet*Bytes*", "Internode Bytes Sent", "bytes", True, True, False, False, None
-    )
+    ends = [load_and_aggregate(inf_folder, pattern)[0][-1]]
+    for folder, _ in train_folders:
+        ends.append(load_and_aggregate(folder, pattern)[0][-1])
+    max_t = min(ends)
 
-    t_inf_end = load_and_aggregate(inf_folder, pattern)[0][-1]
-    t_train_end = load_and_aggregate(train_folder, pattern)[0][-1]
-    max_t = min(t_inf_end, t_train_end)
+    fig, ax = plt.subplots(figsize=(10, 5))
 
     t_inf, v_inf = load_and_aggregate(inf_folder, pattern, max_minutes=max_t)
-    t_train, v_train = load_and_aggregate(train_folder, pattern, max_minutes=max_t)
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
-
     ax.plot(t_inf, np.maximum(v_inf, 1.0), color=INF_COLOR, linewidth=1.6, label="Inference")
-    ax.plot(t_train, np.maximum(v_train, 1.0), color=TRAIN_COLOR, linewidth=1.6, label="Training")
 
-    if add_threshold:
-        med_train = float(np.median(v_train[v_train > 0])) if (v_train > 0).any() else 0
-        if med_train > 0:
-            thresh = med_train / 100
-            if thresh >= 1e9:
-                thresh_str = f"{_fmt_num(thresh/1e9)} GB/s"
-            elif thresh >= 1e6:
-                thresh_str = f"{_fmt_num(thresh/1e6)} MB/s"
-            elif thresh >= 1e3:
-                thresh_str = f"{_fmt_num(thresh/1e3)} kB/s"
-            else:
-                thresh_str = f"{_fmt_num(thresh)} B/s"
-            ax.axhline(thresh, color=THRESH_COLOR, linewidth=1.2, linestyle="--", zorder=0)
-            ax.text(
-                1.0, thresh,
-                f"bandwidth limit ({thresh_str})",
+    for (folder, label), color in zip(train_folders, TRAIN_COLORS):
+        t, v = load_and_aggregate(folder, pattern, max_minutes=max_t)
+        ax.plot(t, np.maximum(v, 1.0), color=color, linewidth=1.6, label=label)
+
+    if threshold:
+        thresh = float(threshold)
+        if thresh >= 1e9:
+            thresh_str = f"{_fmt_num(thresh/1e9)} GB/s"
+        elif thresh >= 1e6:
+            thresh_str = f"{_fmt_num(thresh/1e6)} MB/s"
+        elif thresh >= 1e3:
+            thresh_str = f"{_fmt_num(thresh/1e3)} kB/s"
+        else:
+            thresh_str = f"{_fmt_num(thresh)} B/s"
+        ax.axhline(thresh, color=THRESH_COLOR, linewidth=1.2, linestyle="--", zorder=0)
+        ax.text(1.0, thresh, f"bandwidth limit ({thresh_str})",
                 color=THRESH_COLOR, fontsize=8, va="bottom", ha="right",
-                transform=ax.get_yaxis_transform(),
-            )
+                transform=ax.get_yaxis_transform())
 
-    if log_scale:
-        apply_log_scale(ax)
-
-    ax.set_title(panel_title, fontsize=12, fontweight="bold", color="#333333", pad=8)
+    apply_log_scale(ax)
+    ax.set_title(title, fontsize=14, fontweight="bold", color="#333333", pad=8)
     ax.set_xlabel("Elapsed time (min)", fontsize=9, color="#333333")
     ax.tick_params(axis="x", labelsize=8, colors="#333333")
     ax.tick_params(axis="y", labelsize=8, colors="#333333")
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(adaptive_bytes_formatter))
-    ax.legend(loc="upper left", fontsize=9, framealpha=0.7, edgecolor="#cccccc")
+    ax.legend(fontsize=9, framealpha=0.7, edgecolor="#cccccc")
     ax.spines[["top", "right"]].set_visible(False)
-    ax.spines[["left", "bottom"]].set_color("#cccccc")
-    ax.grid(True, color="#eeeeee", linewidth=0.8)
+    ax.grid(True, linewidth=0.4, alpha=0.5)
 
     fig.tight_layout()
-    fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
+    plt.style.use("default")
     print(f"Saved: {output_path}")
 
 
