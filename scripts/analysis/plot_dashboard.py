@@ -450,12 +450,13 @@ def plot_internode_bytes(
     ax.tick_params(axis="x", labelsize=8, colors="#333333")
     ax.tick_params(axis="y", labelsize=8, colors="#333333")
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(adaptive_bytes_formatter))
-    ax.legend(fontsize=9, framealpha=0.7, edgecolor="#cccccc")
     ax.spines[["top", "right"]].set_visible(False)
     ax.spines[["left", "bottom"]].set_color("#cccccc")
     ax.grid(True, color="#eeeeee", linewidth=0.8)
 
     fig.tight_layout()
+    ax.legend(fontsize=9, framealpha=0.7, edgecolor="#cccccc",
+              loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3)
     fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"Saved: {output_path}")
