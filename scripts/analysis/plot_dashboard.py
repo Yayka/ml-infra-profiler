@@ -227,7 +227,7 @@ def plot_dataset(folder: Path, title: str) -> None:
 
 DATASETS = [
     (RESULTS / "inference", "Inference — Network & PCIe Dashboard"),
-    (RESULTS / "distributed inference",
+    (RESULTS / "distributed inference" / "inference",
      "Distributed Inference — Network & PCIe Dashboard"),
 ]
 
@@ -278,10 +278,19 @@ def load_and_aggregate(
     return t, v
 
 
-def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
-                    title: str = "Inference vs Training (Llama 3.1 8B)") -> None:
-    INF_COLOR = "#1f77b4"   # blue  — Distributed Inference
-    TRAIN_COLOR = "#d62728"  # red   — Training
+def plot_comparison(
+    inf_folder: Path,
+    train_runs: list[tuple[Path, str, str]],
+    output_path: Path,
+    title: str = "Inference vs Training",
+) -> None:
+    """Overlay inference against one or more training runs on a 4-panel dashboard.
+
+    `train_runs` is a list of `(folder, label, color)` tuples. Pass a single
+    entry for the original two-curve comparison or multiple entries to overlay
+    several training workloads in one figure.
+    """
+    INF_COLOR = "#1f77b4"   # blue — Distributed Inference
     THRESH_COLOR = "#ff7f0e"  # orange
 
     # Panels: (pattern, title, unit_type, threshold_value, log_scale, differentiate, use_sum, force_unit)
@@ -293,11 +302,12 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
         ("network interface*", "Internode Cumulative Bytes Sent", "bytes",   2e9,   True,  False, True,  "GB"),
     ]
 
-    # Clip both runs to the shorter duration so x-axes align.
+    # Clip all runs to the shortest duration so x-axes align.
     any_pat = panels[0][0]
-    t_inf_end = load_and_aggregate(inf_folder, any_pat)[0][-1]
-    t_train_end = load_and_aggregate(train_folder, any_pat)[0][-1]
-    max_t = min(t_inf_end, t_train_end)
+    ends = [load_and_aggregate(inf_folder, any_pat)[0][-1]]
+    for folder, _, _ in train_runs:
+        ends.append(load_and_aggregate(folder, any_pat)[0][-1])
+    max_t = min(ends)
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 7))
     fig.patch.set_facecolor("white")
@@ -305,25 +315,23 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
     for ax, (pattern, panel_title, unit_type, threshold_value, log_scale, diff, use_sum, force_unit) in zip(axes.flat, panels):
         t_inf, v_inf = load_and_aggregate(
             inf_folder, pattern, max_minutes=max_t, differentiate=diff, use_sum=use_sum)
-        t_train, v_train = load_and_aggregate(
-            train_folder, pattern, max_minutes=max_t, differentiate=diff, use_sum=use_sum)
 
         ax.set_facecolor("white")
         floor = 1e-3 if unit_type == "packets" else 1.0
         ax.plot(t_inf, np.maximum(v_inf, floor), color=INF_COLOR,
                 linewidth=1.6, label="Inference")
-        ax.plot(t_train, np.maximum(v_train, floor), color=TRAIN_COLOR,
-                linewidth=1.6, label="Training")
+
+        all_vals = [v_inf]
+        for folder, label, color in train_runs:
+            t_train, v_train = load_and_aggregate(
+                folder, pattern, max_minutes=max_t, differentiate=diff, use_sum=use_sum)
+            ax.plot(t_train, np.maximum(v_train, floor), color=color,
+                    linewidth=1.6, label=label)
+            all_vals.append(v_train)
 
         if threshold_value is not None and threshold_value is not False:
-            if threshold_value is True:
-                med_train = float(np.median(v_train[v_train > 0])) if (
-                    v_train > 0).any() else 0
-                thresh = med_train / 100 if med_train > 0 else None
-            else:
-                thresh = float(threshold_value)
-
-            if thresh is not None and thresh > 0:
+            thresh = float(threshold_value)
+            if thresh > 0:
                 if unit_type == "packets":
                     if thresh >= 1e6:
                         thresh_str = f"{_fmt_num(thresh/1e6)}M p/s"
@@ -359,8 +367,8 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
         if log_scale:
             apply_log_scale(ax)
 
-        all_vals = np.concatenate([v_inf, v_train])
-        y_max = float(all_vals.max()) if len(all_vals) else 1.0
+        concat_vals = np.concatenate(all_vals)
+        y_max = float(concat_vals.max()) if len(concat_vals) else 1.0
         if force_unit == "GB/s":
             ax.yaxis.set_major_formatter(
                 ticker.FuncFormatter(lambda v, _: f"{v/1e9:.2f} GB/s"))
@@ -393,8 +401,8 @@ def plot_comparison(inf_folder: Path, train_folder: Path, output_path: Path,
     )
     fig.tight_layout()
     handles, labels = axes.flat[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=2, fontsize=9,
-               framealpha=0.7, edgecolor="#cccccc",
+    fig.legend(handles, labels, loc="upper center", ncol=len(handles),
+               fontsize=9, framealpha=0.7, edgecolor="#cccccc",
                bbox_to_anchor=(0.5, 1.0))
     fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -467,14 +475,21 @@ if __name__ == "__main__":
     for folder, title in DATASETS:
         plot_dataset(folder, title)
 
+    inference_dir = RESULTS / "distributed inference" / "inference"
+    training_runs = [
+        (RESULTS / "baseline", "Llama 3.1 8B Training", "#d62728"),  # red
+        (RESULTS / "moe", "Mixtral 3.7B MoE Training", "#2ca02c"),  # green
+    ]
+
     plot_comparison(
-        RESULTS / "distributed inference",
-        RESULTS / "training",
+        inference_dir,
+        training_runs,
         RESULTS / "comparison.png",
+        title="Inference vs Training",
     )
 
     plot_internode_bytes(
-        RESULTS / "distributed inference",
-        RESULTS / "training",
+        inference_dir,
+        [(folder, label) for folder, label, _ in training_runs],
         RESULTS / "internode_bytes.png",
     )
