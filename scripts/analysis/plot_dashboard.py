@@ -233,7 +233,7 @@ DATASETS = [
 
 
 def load_and_aggregate(
-    folder: Path,
+    folder: Path | list[Path],
     pattern: str,
     max_minutes: float | None = None,
     differentiate: bool = False,
@@ -242,6 +242,9 @@ def load_and_aggregate(
     """Return (elapsed_minutes, aggregated_values) arrays for all series in a CSV.
 
     Args:
+        folder: a single directory, or a list of directories whose CSVs are
+            stitched end-to-end (e.g. model-load capture followed by inference
+            capture from the same run, split across files).
         max_minutes: clip the time series to this many elapsed minutes.
         differentiate: convert a cumulative counter to an instantaneous rate
             (bytes/s) via diff/dt — for panels that export running totals.
@@ -250,22 +253,31 @@ def load_and_aggregate(
             which mixes ethernet + infiniband transports that don't double-count).
             Default is max, which avoids tx/rx double-counting on Ethernet panels.
     """
-    csv_path = find_csv(folder, pattern)
-    df = pd.read_csv(csv_path, parse_dates=["Time"])
-    series_cols = [c for c in df.columns if c != "Time"]
-    for col in series_cols:
-        df[col] = df[col].apply(parse_value)
-    elapsed = (df["Time"] - df["Time"].iloc[0]).dt.total_seconds() / 60
-    total = df[series_cols].sum(
-        axis=1) if use_sum else df[series_cols].max(axis=1)
+    folders = list(folder) if isinstance(folder, (list, tuple)) else [folder]
+
+    segments_t = []
+    segments_v = []
+    offset = 0.0
+    for f in folders:
+        csv_path = find_csv(f, pattern)
+        df = pd.read_csv(csv_path, parse_dates=["Time"])
+        series_cols = [c for c in df.columns if c != "Time"]
+        for col in series_cols:
+            df[col] = df[col].apply(parse_value)
+        elapsed = (df["Time"] - df["Time"].iloc[0]).dt.total_seconds() / 60
+        total = df[series_cols].sum(
+            axis=1) if use_sum else df[series_cols].max(axis=1)
+        segments_t.append(elapsed.values + offset)
+        segments_v.append(total.values)
+        offset = segments_t[-1][-1]
+
+    t = np.concatenate(segments_t)
+    v = np.concatenate(segments_v)
 
     if max_minutes is not None:
-        mask = elapsed <= max_minutes
-        elapsed = elapsed[mask]
-        total = total[mask]
-
-    t = elapsed.values
-    v = total.values
+        mask = t <= max_minutes
+        t = t[mask]
+        v = v[mask]
 
     if differentiate and len(t) > 1:
         dt_sec = np.diff(t) * 60  # minutes → seconds
@@ -279,16 +291,21 @@ def load_and_aggregate(
 
 
 def plot_comparison(
-    inf_folder: Path,
+    inference_segments: list[tuple[Path, str, str]],
     train_runs: list[tuple[Path, str, str]],
     output_path: Path,
     title: str = "Inference vs Training",
+    xlim_minutes: float | None = None,
 ) -> None:
     """Overlay inference against one or more training runs on a 4-panel dashboard.
 
-    `train_runs` is a list of `(folder, label, color)` tuples. Pass a single
-    entry for the original two-curve comparison or multiple entries to overlay
-    several training workloads in one figure.
+    `inference_segments` is a list of `(folder, label, linestyle)` tuples. When
+    multiple entries are supplied, their captures are stitched end-to-end with
+    cumulative time offsets — useful when a single run was exported as multiple
+    CSVs (e.g. model load then inference). Each segment is plotted in the shared
+    inference color with its own label and linestyle.
+
+    `train_runs` is a list of `(folder, label, color)` tuples.
     """
     INF_COLOR = "#1f77b4"   # blue — Distributed Inference
     THRESH_COLOR = "#ff7f0e"  # orange
@@ -302,29 +319,43 @@ def plot_comparison(
         ("network interface*", "Internode Cumulative Bytes Sent", "bytes",   2e9,   True,  False, True,  "GB"),
     ]
 
-    # Clip all runs to the shortest duration so x-axes align.
+    # X-axis spans the longest run; each curve ends naturally at its own duration.
     any_pat = panels[0][0]
-    ends = [load_and_aggregate(inf_folder, any_pat)[0][-1]]
+    inf_folders = [f for f, _, _ in inference_segments]
+    ends = [load_and_aggregate(inf_folders, any_pat)[0][-1]]
     for folder, _, _ in train_runs:
         ends.append(load_and_aggregate(folder, any_pat)[0][-1])
-    max_t = min(ends)
+    max_t = max(ends)
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 7))
     fig.patch.set_facecolor("white")
 
     for ax, (pattern, panel_title, unit_type, threshold_value, log_scale, diff, use_sum, force_unit) in zip(axes.flat, panels):
-        t_inf, v_inf = load_and_aggregate(
-            inf_folder, pattern, max_minutes=max_t, differentiate=diff, use_sum=use_sum)
-
         ax.set_facecolor("white")
         floor = 1e-3 if unit_type == "packets" else 1.0
-        ax.plot(t_inf, np.maximum(v_inf, floor), color=INF_COLOR,
-                linewidth=1.6, label="Inference")
 
-        all_vals = [v_inf]
+        # For cumulative panels (use_sum is the current marker), rebase each
+        # segment so its accumulation continues from the previous one's end —
+        # otherwise the counter visually restarts at 0 between segments.
+        all_vals = []
+        offset = 0.0
+        value_offset = 0.0
+        for folder, label, linestyle in inference_segments:
+            t_seg, v_seg = load_and_aggregate(
+                folder, pattern, differentiate=diff, use_sum=use_sum)
+            t_seg = t_seg + offset
+            if use_sum:
+                v_seg = v_seg + value_offset
+            ax.plot(t_seg, np.maximum(v_seg, floor), color=INF_COLOR,
+                    linewidth=1.6, linestyle=linestyle, label=label)
+            offset = t_seg[-1] if len(t_seg) else offset
+            if use_sum and len(v_seg):
+                value_offset = v_seg[-1]
+            all_vals.append(v_seg)
+
         for folder, label, color in train_runs:
             t_train, v_train = load_and_aggregate(
-                folder, pattern, max_minutes=max_t, differentiate=diff, use_sum=use_sum)
+                folder, pattern, differentiate=diff, use_sum=use_sum)
             ax.plot(t_train, np.maximum(v_train, floor), color=color,
                     linewidth=1.6, label=label)
             all_vals.append(v_train)
@@ -391,6 +422,9 @@ def plot_comparison(
         ax.spines[["top", "right"]].set_visible(False)
         ax.spines[["left", "bottom"]].set_color("#cccccc")
         ax.grid(True, color="#eeeeee", linewidth=0.8)
+
+        if xlim_minutes is not None:
+            ax.set_xlim(0, xlim_minutes)
 
     fig.suptitle(
         title,
@@ -476,20 +510,28 @@ if __name__ == "__main__":
         plot_dataset(folder, title)
 
     inference_dir = RESULTS / "distributed inference" / "inference"
+    model_load_dir = RESULTS / "distributed inference" / "model load"
+    # Model load and inference came from a single run, split across two CSV
+    # exports. Stitch them end-to-end and render model load as a dashed lead-in.
+    inference_segments = [
+        (model_load_dir, "Llama 2 70B Model Load", "--"),
+        (inference_dir, "Llama 2 70B Inference", "-"),
+    ]
     training_runs = [
         (RESULTS / "baseline", "Llama 3.1 8B Training", "#d62728"),  # red
         (RESULTS / "moe", "Mixtral 3.7B MoE Training", "#2ca02c"),  # green
     ]
 
     plot_comparison(
-        inference_dir,
+        inference_segments,
         training_runs,
         RESULTS / "comparison.png",
         title="Inference vs Training",
+        xlim_minutes=130,
     )
 
     plot_internode_bytes(
-        inference_dir,
+        [f for f, _, _ in inference_segments],
         [(folder, label) for folder, label, _ in training_runs],
         RESULTS / "internode_bytes.png",
     )
