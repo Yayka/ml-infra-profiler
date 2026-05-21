@@ -251,42 +251,37 @@ def plot_inference_comparison(
     df_t2i:  pd.DataFrame | None,
     df_t2v:  pd.DataFrame | None,
     out_path: Path,
-    target_min: float = 180.0,
 ):
-    """3-panel stacked comparison: text summarization / T2I / T2V."""
+    """Single-panel comparison of all 3 workloads: text summarization / T2I / T2V."""
     datasets = [
-        (df_text, "Text Summarization (Llama 3.1 8B)",   "#1f77b4", True),
-        (df_t2i,  "Text to Image (SDXL)",                "#2ca02c", False),
-        (df_t2v,  "Text to Video (Wan2.2-T2V-A14B)",     "#d62728", False),
+        (df_text, "Text Summarization (Llama 3.1 8B)",  "#1f77b4"),
+        (df_t2i,  "Text to Image (SDXL)",               "#2ca02c"),
+        (df_t2v,  "Text to Video (Wan2.2-T2V-A14B)",    "#d62728"),
     ]
-    bytes_fmt = ticker.FuncFormatter(_fmt_bytes_s)
-    fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
-    fig.suptitle(
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.set_title(
         "Internode Bytes Sent — Inference Comparison",
         fontsize=13, fontweight="bold",
     )
-    for ax, (df, title, color, do_extrap) in zip(axes, datasets):
-        ax.set_title(title, fontweight="bold", fontsize=10)
-        ax.set_yscale("log")
-        ax.yaxis.set_major_formatter(bytes_fmt)
-        ax.set_ylabel("Throughput")
-        ax.set_xlim(0, target_min)
-        ax.axhline(1e6, color="#ff7f0e", linestyle="--", linewidth=1.2,
-                   label="1 MB/s threshold")
-        if df is not None:
-            t, v = _server_tx(df)
-            if len(t):
-                ax.plot(t, v, color=color, linewidth=1.4, label="measured")
-                if do_extrap:
-                    t_ext, v_ext = extrapolate_to(t, v, target_min)
-                    if len(t_ext):
-                        ax.plot(t_ext, v_ext, color=color, linewidth=1.2,
-                                linestyle="--", alpha=0.55, label="extrapolated (trend)")
-        ax.set_ylim(bottom=1e2)
-        ax.legend(fontsize=8, loc="upper right", framealpha=0.8)
-    axes[-1].set_xlabel("Elapsed time (min)")
+
+    ax.set_yscale("log")
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(_fmt_bytes_s))
+    ax.set_ylabel("Throughput")
+    ax.set_xlabel("Elapsed time (min)")
+    ax.axhline(1e6, color="#ff7f0e", linestyle="--", linewidth=1.5,
+               label="1 MB/s threshold")
+
+    for df, label, color in datasets:
+        if df is None:
+            continue
+        t, v = _server_tx(df)
+        if len(t):
+            ax.plot(t, v, color=color, linewidth=2.0, label=label)
+
+    ax.legend(fontsize=9, loc="upper right", framealpha=0.8)
     fig.tight_layout()
-    fig.savefig(out_path, bbox_inches="tight")
+    fig.savefig(out_path, bbox_inches="tight", dpi=150)
     plt.close(fig)
     print(f"Saved: {out_path}")
 
@@ -299,16 +294,20 @@ def main():
                         default="results/distributed inference/inference")
     parser.add_argument("--model-load-dir",
                         default="results/distributed inference/model load")
+    parser.add_argument("--text-dir",
+                        default="results/distributed inference",
+                        help="Directory with text inference (Llama) Bytes_s CSV")
     parser.add_argument("--t2i-dir", default="results/t2i/inference")
     parser.add_argument("--t2v-dir", default="results/t2v/inference")
     parser.add_argument("--output-dir",
                         default="results/figures/distributed_inference")
     args = parser.parse_args()
 
-    inf_dir  = Path(args.inference_dir)
-    load_dir = Path(args.model_load_dir)
-    t2i_dir  = Path(args.t2i_dir)
-    t2v_dir  = Path(args.t2v_dir)
+    inf_dir   = Path(args.inference_dir)
+    load_dir  = Path(args.model_load_dir)
+    text_dir  = Path(args.text_dir)
+    t2i_dir   = Path(args.t2i_dir)
+    t2v_dir   = Path(args.t2v_dir)
     out_dir  = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -421,7 +420,7 @@ def main():
     print(f"Saved: {out_dir}/overview.png")
 
     # ── figure 6: 3-way inference comparison ──────────────────────────────
-    text_bytes = _load(inf_dir, "Bytes_s")
+    text_bytes = _load(text_dir, "Bytes_s")
     t2i_bytes  = _load(t2i_dir, "Bytes_s") if t2i_dir.is_dir() else None
     t2v_bytes  = _load(t2v_dir, "Bytes_s") if t2v_dir.is_dir() else None
     plot_inference_comparison(
