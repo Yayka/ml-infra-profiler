@@ -98,9 +98,17 @@ func NewNVLinkCollector(hostengine string) *NVLinkCollector {
 
 	fieldGroup, err := dcgm.FieldGroupCreate("ml_nvlink_bw", nvlinkAllFields)
 	if err != nil {
-		cleanup()
+		// Do NOT call cleanup() — the DCGM session must stay alive for PCIeCollector.
+		// Return a no-op collector that holds cleanup so it runs on agent shutdown.
 		log.Printf("nvlink: FieldGroupCreate failed: %v — NVLink not available on this GPU, skipping NVLink metrics", err)
-		return nil
+		return &NVLinkCollector{
+			cleanup: cleanup,
+			bwDesc: prometheus.NewDesc(
+				"ml_nvlink_bandwidth_kbps",
+				"Current NVLink bandwidth in KB/s per GPU per link (DCGM rate metric).",
+				[]string{"gpu_index", "link_index", "direction"}, nil,
+			),
+		}
 	}
 
 	gpuGroup := dcgm.GroupAllGPUs()
