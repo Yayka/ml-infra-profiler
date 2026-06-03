@@ -15,12 +15,17 @@ RUN cd /mlperf_inference/loadgen && pip install --no-cache-dir .
 RUN pip install --no-cache-dir \
     torch --index-url https://download.pytorch.org/whl/cpu
 
-# Client runtime deps — no vLLM needed
+# Same deps as Dockerfile.mlperf-inference minus vLLM
 RUN pip install --no-cache-dir \
     transformers==4.46.2 \
+    nltk==3.8.1 \
+    evaluate==0.4.0 \
+    rouge-score==0.1.2 \
+    accelerate==0.21.0 \
     sentencepiece==0.2.0 \
-    requests==2.31.0 \
-    numpy \
-    tqdm
+    absl-py==1.4.0 \
+    huggingface_hub \
+    datasets \
+    requests
 
 WORKDIR /mlperf_inference/language/llama3.1-405b
