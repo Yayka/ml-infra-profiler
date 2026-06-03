@@ -66,6 +66,7 @@ func init() {
 }
 
 // NVLinkCollector collects per-GPU per-link NVLink bandwidth via DCGM.
+// NewNVLinkCollector returns nil if the GPU has no NVLink (e.g. PCIe A100).
 // Metrics are Gauges (current KB/s) — DCGM bandwidth fields are rates, not
 // cumulative counters. Requires CGO_ENABLED=1 and libdcgm.so.4 at runtime.
 type NVLinkCollector struct {
@@ -98,7 +99,8 @@ func NewNVLinkCollector(hostengine string) *NVLinkCollector {
 	fieldGroup, err := dcgm.FieldGroupCreate("ml_nvlink_bw", nvlinkAllFields)
 	if err != nil {
 		cleanup()
-		log.Fatalf("nvlink: FieldGroupCreate failed: %v", err)
+		log.Printf("nvlink: FieldGroupCreate failed: %v — NVLink not available on this GPU, skipping NVLink metrics", err)
+		return nil
 	}
 
 	gpuGroup := dcgm.GroupAllGPUs()

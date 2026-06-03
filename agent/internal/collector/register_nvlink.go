@@ -11,9 +11,9 @@ import (
 // Register adds all active collectors to reg for a Linux + NVLink build.
 // Fails loudly at startup if DCGM is unavailable.
 func Register(reg *prometheus.Registry, cfg *config.Config, provider netio.NetworkStatsProvider) {
-	reg.MustRegister(
-		NewNetIOCollector(provider, cfg.Network.IncludeInterfaces),
-		NewNVLinkCollector(cfg.NVLink.DCGMHostengine),
-		NewPCIeCollector(),
-	)
+	reg.MustRegister(NewNetIOCollector(provider, cfg.Network.IncludeInterfaces))
+	if c := NewNVLinkCollector(cfg.NVLink.DCGMHostengine); c != nil {
+		reg.MustRegister(c)
+	}
+	reg.MustRegister(NewPCIeCollector())
 }
