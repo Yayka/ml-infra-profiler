@@ -12,12 +12,13 @@ RUN git clone --depth 1 --branch v5.0 \
 RUN cd /mlperf_inference/loadgen && pip install --no-cache-dir .
 
 # Client-only deps: tokenization, HTTP requests, dataset loading
+# Install transformers without torch (tokenization only, no model inference)
 RUN pip install --no-cache-dir \
-    transformers==4.46.2 \
+    tokenizers==0.20.3 \
     sentencepiece==0.2.0 \
-    accelerate==0.21.0 \
     requests==2.31.0 \
     numpy \
-    tqdm
+    tqdm && \
+    pip install --no-cache-dir --no-deps transformers==4.46.2
 
 WORKDIR /mlperf_inference/language/llama3.1-405b
