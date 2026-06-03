@@ -15,6 +15,7 @@ results/*
 !results/internode_bytes_diloco.png
 !results/inference_vs_diloco.png
 !results/inference/
+!results/inference-8b/
 !results/distributed inference/
 !results/moe/
 .venv/
