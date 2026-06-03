@@ -1,7 +1,7 @@
 .PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux launch-job launch-agent \
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
         setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
-        build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference run-mlperf-inference-server run-mlperf-inference-client \
+        build-mlperf-inference build-mlperf-inference-client prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference run-mlperf-inference-server run-mlperf-inference-client \
         build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 run-mlperf-llama2-client \
         setup-mlperf-sdxl prepare-mlperf-sdxl-data run-mlperf-sdxl verify-mlperf-sdxl \
         run-moe-smoke run-moe
@@ -114,6 +114,11 @@ verify-mlperf-tiny:
 # Build Docker image with vLLM + LoadGen + MLCommons reference scripts
 build-mlperf-inference:
 	docker build -f infra/docker/Dockerfile.mlperf-inference \
+		-t ml-netprof/mlperf-inference:latest .
+
+# Build lightweight client-only image (~1 GB) — no GPU/vLLM, for running LoadGen on a CPU node
+build-mlperf-inference-client:
+	docker build -f infra/docker/Dockerfile.mlperf-inference-client \
 		-t ml-netprof/mlperf-inference:latest .
 
 # Download CNN/DM eval dataset + Llama3.1-8B-Instruct model (~15 GB). Requires HF_TOKEN in .env.
