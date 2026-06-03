@@ -1,0 +1,112 @@
+{
+  "title": "Infrastructure Clean",
+  "uid": "infra-clean",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 3 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "up{job=\"ml_training_nodes\"}",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "color": "red", "value": null },
+            { "color": "green", "value": 1 }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Ethernet — Bytes/s",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 3, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(ml_net_interface_bytes_total{transport=\"ethernet\"}[5m])",
+          "legendFormat": "{{instance}} {{interface}} {{direction}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": { "lineWidth": 1 }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Ethernet — Packets/s",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 3, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(ml_net_interface_packets_total{transport=\"ethernet\"}[5m])",
+          "legendFormat": "{{instance}} {{interface}} {{direction}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps",
+          "custom": { "lineWidth": 1 }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "network interface stats",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 11, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum by (instance, transport) (ml_net_interface_bytes_total)",
+          "legendFormat": "{{instance}} {{transport}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "lineWidth": 1 }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "PCIe stats",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 11, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "ml_pcie_bandwidth_bytes_per_sec",
+          "legendFormat": "{{instance}} direction: {{direction}} gpu_index: {{gpu_index}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": { "lineWidth": 1 }
+        }
+      }
+    }
+  ]
+}
