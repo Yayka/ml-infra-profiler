@@ -11,14 +11,16 @@ RUN git clone --depth 1 --branch v5.0 \
 # Build and install mlperf_loadgen from source
 RUN cd /mlperf_inference/loadgen && pip install --no-cache-dir .
 
-# Client runtime deps — no torch, no vLLM.
-# SUT_VLLM_http_client.py is mounted at runtime and has no torch/vLLM imports.
+# CPU-only torch (~250 MB) — needed by dataset.py in the MLPerf reference code
+RUN pip install --no-cache-dir \
+    torch --index-url https://download.pytorch.org/whl/cpu
+
+# Client runtime deps — no vLLM needed
 RUN pip install --no-cache-dir \
     transformers==4.46.2 \
     sentencepiece==0.2.0 \
     requests==2.31.0 \
     numpy \
-    tqdm && \
-    pip install --no-cache-dir --no-deps tokenizers==0.20.3
+    tqdm
 
 WORKDIR /mlperf_inference/language/llama3.1-405b
