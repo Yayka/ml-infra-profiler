@@ -123,7 +123,7 @@ docker run --rm \
     -v "${DATASET_DIR}:/data/dataset:ro" \
     -v "${TOKENIZER_PATH}:/data/tokenizer:ro" \
     -v "$(pwd)/${LOG_DIR}:/output" \
-    -v "$(pwd)/scripts/launch/mlperf_llama2/SUT_VLLM_patched.py:/mlperf_inference/language/llama3.1-405b/SUT_VLLM.py:ro" \
+    -v "$(pwd)/scripts/launch/mlperf_inference/SUT_VLLM_http_client.py:/mlperf_inference/language/llama3.1-405b/SUT_VLLM.py:ro" \
     -v "$(pwd)/scripts/launch/mlperf_llama2/main_patched.py:/mlperf_inference/language/llama3.1-405b/main.py:ro" \
     "$IMAGE" \
     python main.py \

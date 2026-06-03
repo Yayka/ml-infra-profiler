@@ -11,14 +11,14 @@ RUN git clone --depth 1 --branch v5.0 \
 # Build and install mlperf_loadgen from source
 RUN cd /mlperf_inference/loadgen && pip install --no-cache-dir .
 
-# Client-only deps: tokenization, HTTP requests, dataset loading
-# Install transformers without torch (tokenization only, no model inference)
+# Client runtime deps — no torch, no vLLM.
+# SUT_VLLM_http_client.py is mounted at runtime and has no torch/vLLM imports.
 RUN pip install --no-cache-dir \
-    tokenizers==0.20.3 \
+    transformers==4.46.2 \
     sentencepiece==0.2.0 \
     requests==2.31.0 \
     numpy \
     tqdm && \
-    pip install --no-cache-dir --no-deps transformers==4.46.2
+    pip install --no-cache-dir --no-deps tokenizers==0.20.3
 
 WORKDIR /mlperf_inference/language/llama3.1-405b
