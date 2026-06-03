@@ -14,6 +14,7 @@ import requests
 
 import mlperf_loadgen as lg
 from dataset import Dataset
+from transformers import AutoTokenizer
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("Llama-SUT-HTTPClient")
@@ -46,6 +47,12 @@ class SUTHTTPClient:
             model_name=self.model_path,
             dataset_path=self.dataset_path,
             total_sample_count=total_sample_count,
+        )
+        # Load tokenizer directly — Dataset may not expose it as a public attribute
+        self.tokenizer = (
+            self.data_object.tokenizer
+            if hasattr(self.data_object, "tokenizer")
+            else AutoTokenizer.from_pretrained(self.model_path)
         )
         self.qsl = lg.ConstructQSL(
             self.data_object.total_sample_count,
@@ -128,7 +135,7 @@ class SUTHTTPClient:
                     log.error(f"Server returned {resp.status_code}: {resp.text}")
                 resp.raise_for_status()
                 text = resp.json()["choices"][0]["text"]
-                output_token_ids = self.data_object.tokenizer.encode(text)
+                output_token_ids = self.tokenizer.encode(text)
                 pred_output_tokens.append(output_token_ids)
 
             for i in range(len(qitem)):
@@ -199,7 +206,7 @@ class SUTHTTPClientServer(SUTHTTPClient):
                 chunk = json.loads(data_str)
                 delta_text = chunk["choices"][0].get("text", "")
                 if delta_text and first:
-                    first_token_ids = self.data_object.tokenizer.encode(delta_text)
+                    first_token_ids = self.tokenizer.encode(delta_text)
                     response_data = array.array(
                         "B", np.array(first_token_ids, np.int32).tobytes()
                     )
@@ -208,7 +215,7 @@ class SUTHTTPClientServer(SUTHTTPClient):
                     first = False
                 full_text += delta_text
 
-        output_token_ids = self.data_object.tokenizer.encode(full_text)
+        output_token_ids = self.tokenizer.encode(full_text)
         output_array = np.array(output_token_ids, dtype=np.int32)
         n_tokens = output_array.shape[0]
         response_array = array.array("B", output_array.tobytes())
