@@ -7,6 +7,6 @@ dtype: bfloat16
 total_sample_count: 8313
 max_output_tokens: 128
 system_id: linux_a100_vllm
-min_duration_ms: 120000
+min_duration_ms: 7200000
 target_qps: 0.5
-max_query_count: 200
+max_query_count: 5000
