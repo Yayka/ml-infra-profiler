@@ -1,10 +1,9 @@
 .PHONY: setup start-wandb stop-wandb prepare-data run-mac run-linux launch-job launch-agent \
         prepare-mlperf-data pull-nemo run-mlperf verify-mlperf \
         setup-mlperf-tiny prepare-mlperf-tiny-data run-mlperf-tiny run-mlperf-tiny-cpu verify-mlperf-tiny \
-        build-mlperf-inference prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference \
-        build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 \
-        setup-mlperf-sdxl prepare-mlperf-sdxl-data run-mlperf-sdxl verify-mlperf-sdxl
+        build-mlperf-inference build-mlperf-inference-client prepare-mlperf-inference-data run-mlperf-inference run-mlperf-inference-offline verify-mlperf-inference run-mlperf-inference-server run-mlperf-inference-client \
         build-mlperf-llama2 prepare-mlperf-llama2-data run-mlperf-llama2 run-mlperf-llama2-client \
+        setup-mlperf-sdxl prepare-mlperf-sdxl-data run-mlperf-sdxl verify-mlperf-sdxl \
         run-moe-smoke run-moe
 
 # One-time setup: submodule, venv, deps
@@ -117,6 +116,11 @@ build-mlperf-inference:
 	docker build -f infra/docker/Dockerfile.mlperf-inference \
 		-t ml-netprof/mlperf-inference:latest .
 
+# Build lightweight client-only image (~1 GB) — no GPU/vLLM, for running LoadGen on a CPU node
+build-mlperf-inference-client:
+	docker build -f infra/docker/Dockerfile.mlperf-inference-client \
+		-t ml-netprof/mlperf-inference:latest .
+
 # Download CNN/DM eval dataset + Llama3.1-8B-Instruct model (~15 GB). Requires HF_TOKEN in .env.
 prepare-mlperf-inference-data:
 	MODEL_DOWNLOAD_PATH=hf bash scripts/data/prepare_mlperf_inference_data.sh
@@ -132,6 +136,16 @@ run-mlperf-inference-offline:
 # Check ROUGE scores meet 99% of reference targets (ROUGE-1 >= 38.78, ROUGE-2 >= 15.91, ROUGE-L >= 24.50)
 verify-mlperf-inference:
 	bash scripts/launch/mlperf_inference/verify_inference_run.sh
+
+# Run vLLM OpenAI API server (Node A — has GPUs + model weights). Blocks until Ctrl-C.
+# Node B then runs: SERVER_URL=http://<node-a-ip>:8000 make run-mlperf-inference-client
+run-mlperf-inference-server:
+	bash scripts/launch/mlperf_inference/run_server.sh
+
+# Run LoadGen benchmark client (Node B — sends HTTP requests to Node A).
+# Requires SERVER_URL env var pointing to the server started by run-mlperf-inference-server.
+run-mlperf-inference-client:
+	bash scripts/launch/mlperf_inference/run_client.sh
 
 # --- MLPerf Inference v5.0 Llama2-70B benchmark (Datacenter, vLLM, TP=2) ---
 

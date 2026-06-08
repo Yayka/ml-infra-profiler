@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+# Clone MLPerf Inference reference scripts — loadgen is built from source
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git build-essential cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch v5.0 \
+    https://github.com/mlcommons/inference.git /mlperf_inference
+
+# Build and install mlperf_loadgen from source
+RUN cd /mlperf_inference/loadgen && pip install --no-cache-dir .
+
+# CPU-only torch (~250 MB) — needed by dataset.py in the MLPerf reference code
+RUN pip install --no-cache-dir \
+    torch --index-url https://download.pytorch.org/whl/cpu
+
+# Same deps as Dockerfile.mlperf-inference minus vLLM
+RUN pip install --no-cache-dir \
+    transformers==4.46.2 \
+    nltk==3.8.1 \
+    evaluate==0.4.0 \
+    rouge-score==0.1.2 \
+    accelerate==0.21.0 \
+    sentencepiece==0.2.0 \
+    absl-py==1.4.0 \
+    huggingface_hub \
+    datasets \
+    requests
+
+WORKDIR /mlperf_inference/language/llama3.1-405b
