@@ -315,13 +315,13 @@ def plot_comparison(
     INF_COLOR = "#1f77b4"   # blue — Distributed Inference
     THRESH_COLOR = "#ff7f0e"  # orange
 
-    # Panels: (pattern, title, unit_type, threshold_value, log_scale, differentiate, use_sum, force_unit)
-    # threshold_value: None = no line, float = fixed value in base units
+    # Panels: (pattern, title, unit_type, threshold_value, log_scale, differentiate, use_sum, force_unit, no_stitch)
+    # no_stitch: plot each inference segment independently from t=0, v=0 (no cumulative offset)
     panels = [
-        ("Ethernet*Bytes*",    "Internode Bytes Sent",            "bytes",   1e6,   True,  False, False, None),
-        ("Ethernet*Packets*",  "Internode Packets Sent",          "packets", 100,   True,  False, False, None),
-        ("PCIe*",              "Intranode Bytes Sent",            "bytes",   None,  False, False, False, None),
-        ("network interface*", "Internode Cumulative Bytes Sent", "bytes",   2e9,   True,  False, True,  "GB"),
+        ("Ethernet*Bytes*",    "Internode Bytes Sent",            "bytes",   1e6,   True,  False, False, None, False),
+        ("Ethernet*Packets*",  "Internode Packets Sent",          "packets", 100,   True,  False, False, None, False),
+        ("PCIe*",              "Intranode Bytes Sent",            "bytes",   None,  False, False, False, None, False),
+        ("network interface*", "Internode Cumulative Bytes Sent", "bytes",   2e9,   True,  False, True,  "GB",  True),
     ]
 
     # X-axis spans the longest run; each curve ends naturally at its own duration.
@@ -335,27 +335,29 @@ def plot_comparison(
     fig, axes = plt.subplots(2, 2, figsize=(12, 7))
     fig.patch.set_facecolor("white")
 
-    for ax, (pattern, panel_title, unit_type, threshold_value, log_scale, diff, use_sum, force_unit) in zip(axes.flat, panels):
+    for ax, (pattern, panel_title, unit_type, threshold_value, log_scale, diff, use_sum, force_unit, no_stitch) in zip(axes.flat, panels):
         ax.set_facecolor("white")
         floor = 1e-3 if unit_type == "packets" else 1.0
 
-        # For cumulative panels (use_sum is the current marker), rebase each
-        # segment so its accumulation continues from the previous one's end —
-        # otherwise the counter visually restarts at 0 between segments.
         all_vals = []
         offset = 0.0
         value_offset = 0.0
         for folder, label, linestyle in inference_segments:
             t_seg, v_seg = load_and_aggregate(
                 folder, pattern, differentiate=diff, use_sum=use_sum)
-            t_seg = t_seg + offset
-            if use_sum:
-                v_seg = v_seg + value_offset
+            if not no_stitch:
+                t_seg = t_seg + offset
+                if use_sum:
+                    v_seg = v_seg + value_offset
             ax.plot(t_seg, np.maximum(v_seg, floor), color=INF_COLOR,
                     linewidth=1.6, linestyle=linestyle, label=label)
-            offset = t_seg[-1] if len(t_seg) else offset
-            if use_sum and len(v_seg):
-                value_offset = v_seg[-1]
+            if no_stitch and len(t_seg) and t_seg[-1] < max_t:
+                ax.plot([t_seg[-1], max_t], [max(v_seg[-1], floor), max(v_seg[-1], floor)],
+                        color=INF_COLOR, linewidth=1.6, linestyle=linestyle)
+            if not no_stitch:
+                offset = t_seg[-1] if len(t_seg) else offset
+                if use_sum and len(v_seg):
+                    value_offset = v_seg[-1]
             all_vals.append(v_seg)
 
         for folder, label, color in train_runs:

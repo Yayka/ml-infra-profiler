@@ -84,7 +84,9 @@ _UNIT_RE = re.compile(
 )
 
 _PREFIX = {"T": 1e12, "G": 1e9, "M": 1e6, "k": 1e3, "m": 1e-3,
-           "µ": 1e-6, "n": 1e-9, "p": 1e-12}
+           "µ": 1e-6, "n": 1e-9}
+# Note: "p" is intentionally excluded — in network metrics "p" always means
+# packets (unit), never pico (prefix). "38.3 p/s" = 38.3 packets/s.
 
 
 def parse_value(s: str) -> float:
@@ -152,7 +154,17 @@ def _short_label(col: str) -> str:
     return col
 
 
-SERVER_NODE = "20.29.43.19"
+SERVER_NODE = None  # auto-detected from CSV column names
+
+
+def _detect_node(df: pd.DataFrame) -> str | None:
+    """Return the first IP:port found in column names, or None."""
+    ip_re = re.compile(r"(\d+\.\d+\.\d+\.\d+:\d+)")
+    for col in df.columns:
+        m = ip_re.search(col)
+        if m:
+            return m.group(1)
+    return None
 
 
 def plot_metric(
@@ -164,8 +176,15 @@ def plot_metric(
     scale: float = 1.0,
     cols_filter: str | None = None,
     node_filter: str | None = SERVER_NODE,
+    aggregate: bool = False,
+    extend_last: bool = False,
 ):
     """Plot inference + model-load data on ax with optional threshold line."""
+    max_t = max(
+        (df["t"].max() / 60 for df in [df_inf, df_load] if df is not None),
+        default=0.0,
+    )
+
     for df, colors, dataset_name in [
         (df_inf,  COLORS_INFERENCE,  LABEL_INFERENCE),
         (df_load, COLORS_MODEL_LOAD, LABEL_MODEL_LOAD),
@@ -173,20 +192,29 @@ def plot_metric(
         if df is None:
             continue
         value_cols = [c for c in df.columns if c not in ("Time", "t")]
-        if node_filter:
-            value_cols = [c for c in value_cols if node_filter in c]
+        effective_filter = node_filter if node_filter is not None else _detect_node(df)
+        if effective_filter:
+            value_cols = [c for c in value_cols if effective_filter in c]
         if cols_filter:
             value_cols = [c for c in value_cols if cols_filter.lower() in c.lower()]
-        for i, col in enumerate(value_cols):
-            col_label = _short_label(col)
-            label = dataset_name if len(value_cols) == 1 else f"{dataset_name} {col_label}"
-            ax.plot(
-                df["t"] / 60,
-                df[col] * scale,
-                color=colors[i % len(colors)],
-                linewidth=1.4,
-                label=label,
-            )
+        if aggregate and value_cols:
+            combined = df[value_cols].sum(axis=1) * scale
+            t_arr = df["t"].values / 60
+            ax.plot(t_arr, combined, color=colors[0], linewidth=1.4, label=dataset_name)
+            if extend_last and len(t_arr) and t_arr[-1] < max_t:
+                ax.plot([t_arr[-1], max_t], [float(combined.iloc[-1])] * 2,
+                        color=colors[0], linewidth=1.4, linestyle="-")
+        else:
+            for i, col in enumerate(value_cols):
+                col_label = _short_label(col)
+                label = dataset_name if len(value_cols) == 1 else f"{dataset_name} {col_label}"
+                t_arr = df["t"].values / 60
+                vals = df[col].values * scale
+                ax.plot(t_arr, vals, color=colors[i % len(colors)], linewidth=1.4, label=label)
+                if extend_last and len(t_arr) and t_arr[-1] < max_t:
+                    ax.plot([t_arr[-1], max_t], [float(vals[-1])] * 2,
+                            color=colors[i % len(colors)], linewidth=1.4,
+                            linestyle="-")
 
     if threshold:
         val, label = threshold
@@ -202,8 +230,9 @@ def plot_metric(
 
 def _server_tx(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     """Return (t_minutes, bytes_s) for the server TX column."""
+    node = _detect_node(df) if SERVER_NODE is None else SERVER_NODE
     col = next(
-        (c for c in df.columns if SERVER_NODE in c and " tx" in c.lower()),
+        (c for c in df.columns if (node is None or node in c) and " tx" in c.lower()),
         None,
     )
     if col is None:
@@ -299,11 +328,17 @@ def main():
                         default="results/distributed inference/inference")
     parser.add_argument("--model-load-dir",
                         default="results/distributed inference/model load")
+    parser.add_argument("--inference-label", default="Distributed Inference")
+    parser.add_argument("--model-load-label", default="Model Load")
     parser.add_argument("--t2i-dir", default="results/t2i/inference")
     parser.add_argument("--t2v-dir", default="results/t2v/inference")
     parser.add_argument("--output-dir",
                         default="results/figures/distributed_inference")
     args = parser.parse_args()
+
+    global LABEL_INFERENCE, LABEL_MODEL_LOAD
+    LABEL_INFERENCE  = args.inference_label
+    LABEL_MODEL_LOAD = args.model_load_label
 
     inf_dir  = Path(args.inference_dir)
     load_dir = Path(args.model_load_dir)
@@ -319,12 +354,12 @@ def main():
 
     inf_bytes   = _load(inf_dir,  "Bytes_s")
     inf_pkts    = _load(inf_dir,  "Packets_s")
-    inf_cumul   = _load(inf_dir,  "network interface usage")
+    inf_cumul   = _load(inf_dir,  "network interface")
     inf_pcie    = _load(inf_dir,  "PCIe")
 
     load_bytes  = _load(load_dir, "Bytes_s")
     load_pkts   = _load(load_dir, "Packets_s")
-    load_cumul  = _load(load_dir, "network interface usage")
+    load_cumul  = _load(load_dir, "network interface")
     load_pcie   = _load(load_dir, "PCIe")
 
     _bytes_fmt   = ticker.FuncFormatter(_fmt_bytes_s)
@@ -346,7 +381,7 @@ def main():
     fig, ax = plt.subplots(figsize=(10, 4))
     plot_metric(ax, inf_bytes, load_bytes,
                 threshold=(1e6, "inference threshold"),
-                ylabel="Throughput", cols_filter="tx")
+                ylabel="Throughput", aggregate=True)
     _setup_bytes_log(ax)
     ax.set_title("Internode Bytes Sent", fontweight="bold")
     fig.tight_layout()
@@ -358,7 +393,7 @@ def main():
     fig, ax = plt.subplots(figsize=(10, 4))
     plot_metric(ax, inf_pkts, load_pkts,
                 threshold=(100, "inference threshold"),
-                ylabel="Packet rate", cols_filter="tx")
+                ylabel="Packet rate", aggregate=True)
     _setup_pkts_log(ax)
     ax.set_title("Internode Packets Sent", fontweight="bold")
     fig.tight_layout()
@@ -370,7 +405,8 @@ def main():
     fig, ax = plt.subplots(figsize=(10, 4))
     plot_metric(ax, inf_cumul, load_cumul,
                 threshold=(2e9, "inference threshold"),
-                ylabel="Cumulative bytes", node_filter=None)
+                ylabel="Cumulative bytes", node_filter=None,
+                cols_filter="ethernet rx", aggregate=True, extend_last=True)
     ax.yaxis.set_major_formatter(_cumul_fmt)
     ax.set_title("Internode Cumulative Bytes Sent", fontweight="bold")
     fig.tight_layout()
@@ -392,21 +428,22 @@ def main():
 
     # ── figure 5: combined 2×2 overview ───────────────────────────────────
     fig, axes = plt.subplots(2, 2, figsize=(14, 8))
-    fig.suptitle("Distributed Inference vs Model Load — Network & PCIe",
+    fig.suptitle("Inference vs Model Load — Network & PCIe",
                  fontsize=13, fontweight="bold", y=1.01)
 
     plot_metric(axes[0, 0], inf_bytes, load_bytes,
-                (1e6, "inference threshold"), "Throughput", cols_filter="tx")
+                (1e6, "inference threshold"), "Throughput", aggregate=True)
     _setup_bytes_log(axes[0, 0])
     axes[0, 0].set_title("Internode Bytes Sent", fontweight="bold")
 
     plot_metric(axes[0, 1], inf_pkts, load_pkts,
-                (100, "inference threshold"), "Packet rate", cols_filter="tx")
+                (100, "inference threshold"), "Packet rate", aggregate=True)
     _setup_pkts_log(axes[0, 1])
     axes[0, 1].set_title("Internode Packets Sent", fontweight="bold")
 
     plot_metric(axes[1, 0], inf_cumul, load_cumul,
-                (2e9, "inference threshold"), "Cumulative bytes", node_filter=None)
+                (2e9, "inference threshold"), "Cumulative bytes", node_filter=None,
+                cols_filter="ethernet rx", aggregate=True, extend_last=True)
     axes[1, 0].yaxis.set_major_formatter(_cumul_fmt)
     axes[1, 0].set_title("Internode Cumulative Bytes Sent", fontweight="bold")
 
