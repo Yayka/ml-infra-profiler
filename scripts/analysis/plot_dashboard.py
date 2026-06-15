@@ -27,11 +27,16 @@ UNIT_MULTIPLIERS = {
     "MB": 1e6,
     "GB": 1e9,
     "TB": 1e12,
+    "KiB": 1024,
+    "MiB": 1024 ** 2,
+    "GiB": 1024 ** 3,
+    "TiB": 1024 ** 4,
 }
 
 PACKET_MULTIPLIERS = {
     "kp/s": 1e3,
     "Mp/s": 1e6,
+    "mp/s": 1e-3,
     "p/s": 1,
 }
 
@@ -509,13 +514,9 @@ if __name__ == "__main__":
     for folder, title in DATASETS:
         plot_dataset(folder, title)
 
-    inference_dir = RESULTS / "distributed inference" / "inference"
-    model_load_dir = RESULTS / "distributed inference" / "model load"
-    # Model load and inference came from a single run, split across two CSV
-    # exports. Stitch them end-to-end and render model load as a dashed lead-in.
     inference_segments = [
-        (model_load_dir, "Llama 2 70B Model Load", "--"),
-        (inference_dir, "Llama 2 70B Inference", "-"),
+        (RESULTS / "inference-8b" / "model load", "Llama 3.1 8B Model Load", "--"),
+        (RESULTS / "inference-8b" / "inference", "Llama 3.1 8B Inference", "-"),
     ]
     training_runs = [
         (RESULTS / "baseline", "Llama 3.1 8B Training", "#d62728"),  # red
